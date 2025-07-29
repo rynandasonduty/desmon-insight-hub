@@ -52,6 +52,14 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				// DESMON+ Custom Colors
+				desmon: {
+					primary: 'hsl(var(--desmon-primary))',
+					secondary: 'hsl(var(--desmon-secondary))',
+					background: 'hsl(var(--desmon-background))',
+					accent: 'hsl(var(--desmon-accent))',
+					neutral: 'hsl(var(--desmon-neutral))'
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
@@ -84,11 +92,30 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'fade-in': {
+					from: { opacity: '0', transform: 'translateY(10px)' },
+					to: { opacity: '1', transform: 'translateY(0)' }
+				},
+				'slide-in-right': {
+					from: { transform: 'translateX(100%)' },
+					to: { transform: 'translateX(0)' }
+				},
+				'pulse-glow': {
+					'0%, 100%': { boxShadow: '0 0 5px hsl(var(--desmon-secondary) / 0.5)' },
+					'50%': { boxShadow: '0 0 20px hsl(var(--desmon-secondary) / 0.8)' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'fade-in': 'fade-in 0.5s ease-out',
+				'slide-in-right': 'slide-in-right 0.3s ease-out',
+				'pulse-glow': 'pulse-glow 2s ease-in-out infinite'
+			},
+			boxShadow: {
+				'desmon-card': 'var(--shadow-card)',
+				'desmon-hover': 'var(--shadow-hover)'
 			}
 		}
 	},
