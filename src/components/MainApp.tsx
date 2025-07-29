@@ -4,6 +4,7 @@ import Sidebar from "./layout/Sidebar";
 import DashboardStats from "./dashboard/DashboardStats";
 import RecentActivity from "./dashboard/RecentActivity";
 import UploadInterface from "./upload/UploadInterface";
+import AnalyticsView from "./analytics/AnalyticsView";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +30,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central' }: MainAppProp
       case 'reports':
         return <ReportsManagement />;
       case 'analytics':
-        return <AnalyticsView />;
+        return <AnalyticsView userRole={userRole} currentSBU="SBU Jawa Barat" />;
       case 'kpi':
         return <KPIManagement />;
       case 'users':
@@ -185,12 +186,6 @@ const ReportsManagement = () => (
   </div>
 );
 
-const AnalyticsView = () => (
-  <div className="text-center py-20">
-    <h2 className="text-2xl font-bold">Analytics</h2>
-    <p className="text-muted-foreground">Visualisasi data dan insights</p>
-  </div>
-);
 
 const KPIManagement = () => (
   <div className="text-center py-20">
