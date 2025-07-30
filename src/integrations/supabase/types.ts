@@ -14,7 +14,247 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      kpi_definitions: {
+        Row: {
+          calculation_type: string
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          target_value: number
+          unit: string | null
+          updated_at: string
+          weight_percentage: number
+        }
+        Insert: {
+          calculation_type: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          target_value: number
+          unit?: string | null
+          updated_at?: string
+          weight_percentage: number
+        }
+        Update: {
+          calculation_type?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          target_value?: number
+          unit?: string | null
+          updated_at?: string
+          weight_percentage?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_definitions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kpi_scoring_ranges: {
+        Row: {
+          created_at: string
+          id: string
+          kpi_id: string
+          max_percentage: number
+          min_percentage: number
+          score_value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kpi_id: string
+          max_percentage: number
+          min_percentage: number
+          score_value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kpi_id?: string
+          max_percentage?: number
+          min_percentage?: number
+          score_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kpi_scoring_ranges_kpi_id_fkey"
+            columns: ["kpi_id"]
+            isOneToOne: false
+            referencedRelation: "kpi_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          related_report_id: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          related_report_id?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          related_report_id?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_related_report_id_fkey"
+            columns: ["related_report_id"]
+            isOneToOne: false
+            referencedRelation: "reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+          phone: string | null
+          role: string
+          sbu_name: string | null
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          full_name: string
+          id: string
+          phone?: string | null
+          role: string
+          sbu_name?: string | null
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          phone?: string | null
+          role?: string
+          sbu_name?: string | null
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          calculated_score: number | null
+          created_at: string
+          file_name: string
+          file_path: string | null
+          id: string
+          indicator_type: string
+          processed_data: Json | null
+          raw_data: Json | null
+          rejection_reason: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          video_hashes: string[] | null
+          video_links: Json | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          calculated_score?: number | null
+          created_at?: string
+          file_name: string
+          file_path?: string | null
+          id?: string
+          indicator_type: string
+          processed_data?: Json | null
+          raw_data?: Json | null
+          rejection_reason?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          video_hashes?: string[] | null
+          video_links?: Json | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          calculated_score?: number | null
+          created_at?: string
+          file_name?: string
+          file_path?: string | null
+          id?: string
+          indicator_type?: string
+          processed_data?: Json | null
+          raw_data?: Json | null
+          rejection_reason?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          video_hashes?: string[] | null
+          video_links?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
