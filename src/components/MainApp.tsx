@@ -5,6 +5,9 @@ import DashboardStats from "./dashboard/DashboardStats";
 import RecentActivity from "./dashboard/RecentActivity";
 import UploadInterface from "./upload/UploadInterface";
 import AnalyticsView from "./analytics/AnalyticsView";
+import KPIManagement from "./kpi/KPIManagement";
+import UserManagement from "./user/UserManagement";
+import SettingsView from "./settings/SettingsView";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -187,25 +190,6 @@ const ReportsManagement = () => (
 );
 
 
-const KPIManagement = () => (
-  <div className="text-center py-20">
-    <h2 className="text-2xl font-bold">Manajemen KPI</h2>
-    <p className="text-muted-foreground">Atur target, bobot, dan aturan scoring</p>
-  </div>
-);
 
-const UserManagement = () => (
-  <div className="text-center py-20">
-    <h2 className="text-2xl font-bold">Manajemen User</h2>
-    <p className="text-muted-foreground">Kelola akun pengguna dan akses</p>
-  </div>
-);
-
-const SettingsView = () => (
-  <div className="text-center py-20">
-    <h2 className="text-2xl font-bold">Pengaturan</h2>
-    <p className="text-muted-foreground">Konfigurasi sistem dan preferensi</p>
-  </div>
-);
 
 export default MainApp;
