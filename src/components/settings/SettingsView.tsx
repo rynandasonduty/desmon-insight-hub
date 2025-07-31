@@ -67,7 +67,7 @@ const SettingsView = () => {
       <div>
         <h1 className="text-3xl font-bold">Pengaturan Sistem</h1>
         <p className="text-muted-foreground">
-          Konfigurasi dan preferensi sistem DASMON+
+          Konfigurasi dan preferensi sistem DASHMON+
         </p>
       </div>
 

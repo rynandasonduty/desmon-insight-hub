@@ -236,7 +236,7 @@ const UserManagement = () => {
         <div>
           <h1 className="text-3xl font-bold">Manajemen User</h1>
           <p className="text-muted-foreground">
-            Kelola akun pengguna dan hak akses sistem DASMON+
+            Kelola akun pengguna dan hak akses sistem DASHMON+
           </p>
         </div>
         

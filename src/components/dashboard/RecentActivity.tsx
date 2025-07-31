@@ -96,7 +96,7 @@ const RecentActivity = () => {
     <Card>
       <CardHeader>
         <CardTitle>Aktivitas Terbaru</CardTitle>
-        <CardDescription>Update terkini dari sistem DASMON+</CardDescription>
+        <CardDescription>Update terkini dari sistem DASHMON+</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {activities.map((activity) => (

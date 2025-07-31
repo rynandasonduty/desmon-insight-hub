@@ -23,7 +23,7 @@ const Index = () => {
     
     toast({
       title: "Login Berhasil",
-      description: `Selamat datang di DASMON+, ${userRole === 'admin' ? 'Admin Central' : 'SBU Jawa Barat'}!`,
+      description: `Selamat datang di DASHMON+, ${userRole === 'admin' ? 'Admin Central' : 'SBU Jawa Barat'}!`,
     });
     
     // Navigate to appropriate dashboard
@@ -43,8 +43,8 @@ const Index = () => {
             <span className="text-2xl font-bold text-white">D+</span>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">DASMON+</h1>
-            <p className="text-muted-foreground">Dashboard for Enhancing Social and Communication Outreach from icoN+</p>
+            <h1 className="text-3xl font-bold text-foreground">DASHMON+</h1>
+            <p className="text-muted-foreground">Dashboard for Enhancing Heartfelt Social and Communication Outreach from icoN+</p>
           </div>
         </div>
 
@@ -53,7 +53,7 @@ const Index = () => {
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">Masuk ke Sistem</CardTitle>
             <CardDescription className="text-center">
-              Masukkan kredensial Anda untuk mengakses DASMON+
+              Masukkan kredensial Anda untuk mengakses DASHMON+
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -150,7 +150,7 @@ const Index = () => {
 
         {/* Footer */}
         <p className="text-center text-sm text-muted-foreground">
-          © 2024 DASMON+. Sistem Pelaporan Kegiatan Terintegrasi.
+          © 2025 DASHMON+.
         </p>
       </div>
     </div>
