@@ -31,11 +31,12 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
   const location = useLocation();
 
   const handleSignOut = () => {
+    console.log("Sign out clicked");
     if (onSignOut) {
       onSignOut();
     }
     // Navigate to auth page
-    navigate('/auth');
+    navigate('/auth', { replace: true });
   };
   
   // Get current route from URL path

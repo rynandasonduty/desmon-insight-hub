@@ -148,6 +148,18 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
     setDetailModalOpen(true);
   };
 
+  const handleGenerateReport = () => {
+    toast({
+      title: "Generate Report",
+      description: "Laporan sedang dibuat. Anda akan menerima notifikasi setelah selesai.",
+    });
+  };
+
+  const handleCloseDetailModal = () => {
+    setDetailModalOpen(false);
+    setSelectedReport(null);
+  };
+
   const handleApproveReport = (reportId: string, notes?: string) => {
     toast({
       title: "Laporan Disetujui",
@@ -276,6 +288,19 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
             }}>
               <Filter className="mr-2 h-4 w-4" />
               Filter
+            </Button>
+            <Button variant="outline" onClick={handleGenerateReport}>
+              <FileText className="mr-2 h-4 w-4" />
+              Generate Report
+            </Button>
+            <Button onClick={() => {
+              toast({
+                title: "Export Data",
+                description: "Data laporan sedang diekspor ke Excel.",
+              });
+            }}>
+              <Download className="mr-2 h-4 w-4" />
+              Export
             </Button>
           </div>
         </CardContent>
@@ -414,10 +439,7 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
       {selectedReport && (
         <ReportDetailModal
           isOpen={detailModalOpen}
-          onClose={() => {
-            setDetailModalOpen(false);
-            setSelectedReport(null);
-          }}
+          onClose={handleCloseDetailModal}
           report={selectedReport}
           userRole={userRole}
           onApprove={handleApproveReport}

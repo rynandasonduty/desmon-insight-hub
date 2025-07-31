@@ -19,8 +19,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/admin/*" element={<MainApp userRole="admin" userName="Admin Central" />} />
-          <Route path="/sbu/*" element={<MainApp userRole="sbu" userName="User SBU" currentSBU="SBU Jawa Barat" />} />
+          <Route path="/admin/*" element={<MainApp userRole="admin" userName="Admin Central" onSignOut={() => window.location.href = '/auth'} />} />
+          <Route path="/sbu/*" element={<MainApp userRole="sbu" userName="User SBU" currentSBU="SBU Jawa Barat" onSignOut={() => window.location.href = '/auth'} />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
