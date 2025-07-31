@@ -150,7 +150,7 @@ const Index = () => {
 
         {/* Footer */}
         <p className="text-center text-sm text-muted-foreground">
-          © 2024 DESMON+. Sistem Pelaporan Kegiatan Terintegrasi.
+          © 2024 DASMON+. Sistem Pelaporan Kegiatan Terintegrasi.
         </p>
       </div>
     </div>

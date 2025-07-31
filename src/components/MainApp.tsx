@@ -36,7 +36,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
       onSignOut();
     }
     // Navigate to auth page
-    navigate('/auth', { replace: true });
+    navigate('/', { replace: true });
   };
   
   // Get current route from URL path

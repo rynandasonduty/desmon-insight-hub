@@ -23,12 +23,12 @@ const Auth = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (loginData.email === "admin@desmon.com") {
+      if (loginData.email === "admin@dasmon.com") {
         navigate("/admin/dashboard");
-        toast({ title: "Login Berhasil", description: "Selamat datang, Admin!" });
+        toast({ title: "Login Berhasil", description: "Selamat datang, Admin Ganteng!" });
       } else {
         navigate("/sbu/dashboard");
-        toast({ title: "Login Berhasil", description: "Selamat datang di DESMON+!" });
+        toast({ title: "Login Berhasil", description: "Selamat datang di DASMON+!" });
       }
     } catch (error) {
       toast({ title: "Login Gagal", description: "Email atau password salah.", variant: "destructive" });
@@ -54,11 +54,11 @@ const Auth = () => {
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <Badge variant="outline">Admin</Badge>
-                <span className="text-sm">admin@desmon.com / admin123</span>
+                <span className="text-sm">admin@dasmon.com / admin123</span>
               </div>
               <div className="flex justify-between items-center">
                 <Badge variant="outline">SBU User</Badge>
-                <span className="text-sm">sbu@desmon.com / sbu123</span>
+                <span className="text-sm">sbu@dasmon.com / sbu123</span>
               </div>
             </div>
           </CardHeader>
