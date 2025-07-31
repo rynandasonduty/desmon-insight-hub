@@ -1,19 +1,18 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LogIn, Building2, Shield } from "lucide-react";
-import MainApp from "@/components/MainApp";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'sbu'>('admin');
-  const [userName, setUserName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -22,21 +21,17 @@ const Index = () => {
     // Simulate login process
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    setIsAuthenticated(true);
-    setUserName(userRole === 'admin' ? 'Admin Central' : 'SBU Jawa Barat');
-    
     toast({
       title: "Login Berhasil",
       description: `Selamat datang di DESMON+, ${userRole === 'admin' ? 'Admin Central' : 'SBU Jawa Barat'}!`,
     });
     
+    // Navigate to appropriate dashboard
+    const targetPath = userRole === 'admin' ? '/admin/dashboard' : '/sbu/dashboard';
+    navigate(targetPath);
+    
     setIsLoading(false);
   };
-
-  // Show main app if authenticated
-  if (isAuthenticated) {
-    return <MainApp userRole={userRole} userName={userName} />;
-  }
 
   // Show login page
   return (

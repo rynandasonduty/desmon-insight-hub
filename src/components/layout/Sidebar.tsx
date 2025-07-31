@@ -42,13 +42,13 @@ const Sidebar = ({ userRole, activeRoute, onRouteChange, isCollapsed = false }: 
       id: 'reports',
       label: 'Manajemen Laporan',
       icon: FileText,
-      roles: ['admin']
+      roles: ['admin', 'sbu']
     },
     {
       id: 'analytics',
       label: 'Analytics',
       icon: TrendingUp,
-      roles: ['admin']
+      roles: ['admin', 'sbu']
     },
     {
       id: 'kpi',
@@ -66,7 +66,7 @@ const Sidebar = ({ userRole, activeRoute, onRouteChange, isCollapsed = false }: 
       id: 'settings',
       label: 'Pengaturan',
       icon: Settings,
-      roles: ['admin']
+      roles: ['admin', 'sbu']
     }
   ];
 

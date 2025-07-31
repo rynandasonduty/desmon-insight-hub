@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import Header from "./layout/Header";
 import Sidebar from "./layout/Sidebar";
 import DashboardStats from "./dashboard/DashboardStats";
@@ -24,32 +25,33 @@ interface MainAppProps {
 }
 
 const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, onSignOut }: MainAppProps) => {
-  const [activeRoute, setActiveRoute] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get current route from URL path
+  const getCurrentRoute = () => {
+    const path = location.pathname;
+    if (path.includes('/dashboard')) return 'dashboard';
+    if (path.includes('/upload')) return 'upload';
+    if (path.includes('/approval')) return 'approval';
+    if (path.includes('/reports')) return 'reports';
+    if (path.includes('/analytics')) return 'analytics';
+    if (path.includes('/kpi')) return 'kpi';
+    if (path.includes('/users')) return 'users';
+    if (path.includes('/settings')) return 'settings';
+    if (path.includes('/notifications')) return 'notifications';
+    return 'dashboard';
+  };
 
-  const renderContent = () => {
-    switch (activeRoute) {
-      case 'dashboard':
-        return <DashboardView userRole={userRole} />;
-      case 'upload':
-        return <UploadInterface />;
-      case 'approval':
-        return <ApprovalDesk />;
-      case 'reports':
-        return <ReportsManagement userRole={userRole} currentSBU={currentSBU} />;
-      case 'analytics':
-        return <AnalyticsView userRole={userRole} currentSBU={currentSBU} />;
-      case 'kpi':
-        return <KPIManagement />;
-      case 'users':
-        return <UserManagement />;
-      case 'settings':
-        return <SettingsView />;
-      case 'notifications':
-        return <NotificationCenter userRole={userRole} />;
-      default:
-        return <DashboardView userRole={userRole} />;
-    }
+  const handleRouteChange = (route: string) => {
+    const basePath = userRole === 'admin' ? '/admin' : '/sbu';
+    navigate(`${basePath}/${route}`);
+  };
+
+  const handleNotificationClick = () => {
+    const basePath = userRole === 'admin' ? '/admin' : '/sbu';
+    navigate(`${basePath}/notifications`);
   };
 
   return (
@@ -60,20 +62,48 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
         notificationCount={3}
         onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         onSignOut={onSignOut}
-        onNotificationClick={() => setActiveRoute('notifications')}
+        onNotificationClick={handleNotificationClick}
       />
       
       <div className="flex h-[calc(100vh-4rem)]">
         <Sidebar 
           userRole={userRole}
-          activeRoute={activeRoute}
-          onRouteChange={setActiveRoute}
+          activeRoute={getCurrentRoute()}
+          onRouteChange={handleRouteChange}
           isCollapsed={sidebarCollapsed}
         />
         
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto space-y-6">
-            {renderContent()}
+            <Routes>
+              <Route path="/" element={<Navigate to="dashboard" replace />} />
+              <Route path="/dashboard" element={<DashboardView userRole={userRole} />} />
+              <Route path="/upload" element={<UploadInterface />} />
+              <Route path="/reports" element={<ReportsManagement userRole={userRole} currentSBU={currentSBU} />} />
+              <Route path="/analytics" element={<AnalyticsView userRole={userRole} currentSBU={currentSBU} />} />
+              <Route path="/notifications" element={<NotificationCenter userRole={userRole} />} />
+              
+              {/* SBU specific routes */}
+              {userRole === 'sbu' && (
+                <>
+                  {/* SBU can access settings too */}
+                  <Route path="/settings" element={<SettingsView />} />
+                </>
+              )}
+              
+              {/* Admin only routes */}
+              {userRole === 'admin' && (
+                <>
+                  <Route path="/approval" element={<ApprovalDesk />} />
+                  <Route path="/kpi" element={<KPIManagement />} />
+                  <Route path="/users" element={<UserManagement />} />
+                  <Route path="/settings" element={<SettingsView />} />
+                </>
+              )}
+              
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="dashboard" replace />} />
+            </Routes>
           </div>
         </main>
       </div>
