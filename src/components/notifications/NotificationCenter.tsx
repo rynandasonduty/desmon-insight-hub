@@ -98,6 +98,28 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
 
+  // Simulate real-time notifications
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Add a new notification occasionally (every 2 minutes)
+      if (Math.random() < 0.3) {
+        const newNotification: Notification = {
+          id: `notif-${Date.now()}`,
+          type: ['report_submitted', 'kpi_updated', 'system'][Math.floor(Math.random() * 3)] as any,
+          title: ['Laporan Baru Masuk', 'KPI Diperbarui', 'Notifikasi Sistem'][Math.floor(Math.random() * 3)],
+          message: 'Notifikasi real-time dari sistem DESMON+',
+          createdAt: new Date().toLocaleString('id-ID'),
+          isRead: false,
+          priority: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)] as any
+        };
+        
+        setNotifications(prev => [newNotification, ...prev.slice(0, 9)]); // Keep only 10 notifications
+      }
+    }, 120000); // Check every 2 minutes
+
+    return () => clearInterval(interval);
+  }, []);
+
   const filteredNotifications = notifications.filter(notification => {
     if (filter === 'unread') return !notification.isRead;
     if (filter === 'read') return notification.isRead;
@@ -195,9 +217,18 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
             {unreadCount > 0 && (
               <Badge className="bg-red-600 text-white">{unreadCount}</Badge>
             )}
+            <div className="flex items-center gap-1 text-sm font-normal bg-green-100 text-green-800 px-2 py-1 rounded-full">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Live
+            </div>
           </h1>
           <p className="text-muted-foreground">
-            Kelola dan pantau notifikasi sistem
+            Kelola dan pantau notifikasi sistem real-time
+            {userRole === 'sbu' && (
+              <span className="block text-sm text-primary font-medium">
+                Notifikasi khusus untuk pengguna SBU
+              </span>
+            )}
           </p>
         </div>
         

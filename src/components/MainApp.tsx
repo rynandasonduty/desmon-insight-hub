@@ -38,7 +38,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
       case 'reports':
         return <ReportsManagement userRole={userRole} currentSBU={currentSBU} />;
       case 'analytics':
-        return <AnalyticsView userRole={userRole} currentSBU="SBU Jawa Barat" />;
+        return <AnalyticsView userRole={userRole} currentSBU={currentSBU} />;
       case 'kpi':
         return <KPIManagement />;
       case 'users':
@@ -60,6 +60,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
         notificationCount={3}
         onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         onSignOut={onSignOut}
+        onNotificationClick={() => setActiveRoute('notifications')}
       />
       
       <div className="flex h-[calc(100vh-4rem)]">

@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts';
 import { TrendingUp, Trophy, Target, Activity, Filter, Download } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface AnalyticsViewProps {
   userRole: 'admin' | 'sbu';
@@ -16,6 +16,26 @@ interface AnalyticsViewProps {
 const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsViewProps) => {
   const [selectedPeriod, setSelectedPeriod] = useState('semester-1-2024');
   const [selectedIndicator, setSelectedIndicator] = useState('all');
+  const [liveData, setLiveData] = useState({
+    totalReports: 1295,
+    approvalRate: 94.2,
+    averageScore: 85.7,
+    activeSBU: 18
+  });
+
+  // Simulate real-time updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveData(prev => ({
+        totalReports: prev.totalReports + Math.floor(Math.random() * 3),
+        approvalRate: Math.min(100, prev.approvalRate + (Math.random() - 0.5) * 0.5),
+        averageScore: Math.max(0, prev.averageScore + (Math.random() - 0.5) * 2),
+        activeSBU: Math.min(20, prev.activeSBU + Math.floor(Math.random() * 2))
+      }));
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Mock data - akan diganti dengan data real dari Supabase
   const leaderboardData = [
@@ -73,9 +93,20 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            Analytics Dashboard
+            <div className="flex items-center gap-1 text-sm font-normal bg-green-100 text-green-800 px-2 py-1 rounded-full">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Live
+            </div>
+          </h1>
           <p className="text-muted-foreground">
             Visualisasi kinerja dan insight data real-time DESMON+
+            {userRole === 'sbu' && (
+              <span className="block text-sm text-primary font-medium">
+                Data untuk {currentSBU}
+              </span>
+            )}
           </p>
         </div>
         
@@ -118,9 +149,10 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,295</div>
+            <div className="text-2xl font-bold">{liveData.totalReports.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
               <span className="text-desmon-secondary">+12.5%</span> dari bulan lalu
+              <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
             </p>
           </CardContent>
         </Card>
@@ -131,9 +163,10 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">94.2%</div>
+            <div className="text-2xl font-bold">{liveData.approvalRate.toFixed(1)}%</div>
             <p className="text-xs text-muted-foreground">
               <span className="text-desmon-secondary">+2.1%</span> dari target
+              <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
             </p>
           </CardContent>
         </Card>
@@ -144,9 +177,10 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">85.7</div>
+            <div className="text-2xl font-bold">{liveData.averageScore.toFixed(1)}</div>
             <p className="text-xs text-muted-foreground">
               <span className="text-desmon-secondary">+4.8%</span> improvement
+              <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
             </p>
           </CardContent>
         </Card>
@@ -157,9 +191,10 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">18/20</div>
+            <div className="text-2xl font-bold">{liveData.activeSBU}/20</div>
             <p className="text-xs text-muted-foreground">
-              90% partisipasi aktif
+              {((liveData.activeSBU / 20) * 100).toFixed(0)}% partisipasi aktif
+              <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
             </p>
           </CardContent>
         </Card>

@@ -15,9 +15,10 @@ interface HeaderProps {
   notificationCount: number;
   onMenuToggle?: () => void;
   onSignOut?: () => void;
+  onNotificationClick?: () => void;
 }
 
-const Header = ({ userRole, userName, notificationCount, onMenuToggle, onSignOut }: HeaderProps) => {
+const Header = ({ userRole, userName, notificationCount, onMenuToggle, onSignOut, onNotificationClick }: HeaderProps) => {
   return (
     <header className="h-16 bg-gradient-to-r from-desmon-primary to-desmon-secondary text-white shadow-desmon-card border-b sticky top-0 z-50">
       <div className="h-full px-4 flex items-center justify-between">
@@ -50,6 +51,7 @@ const Header = ({ userRole, userName, notificationCount, onMenuToggle, onSignOut
             variant="ghost"
             size="icon"
             className="relative text-white hover:bg-white/10"
+            onClick={onNotificationClick}
           >
             <Bell className="h-5 w-5" />
             {notificationCount > 0 && (
@@ -82,7 +84,7 @@ const Header = ({ userRole, userName, notificationCount, onMenuToggle, onSignOut
                 Pengaturan
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem className="text-destructive" onClick={onSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Keluar
               </DropdownMenuItem>

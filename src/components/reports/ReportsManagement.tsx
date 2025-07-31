@@ -18,7 +18,9 @@ import {
   Users,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Upload,
+  RefreshCw
 } from "lucide-react";
 
 interface ReportsManagementProps {
@@ -151,6 +153,12 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
           </p>
         </div>
         <div className="flex gap-2">
+          {userRole === 'sbu' && (
+            <Button variant="hero">
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Laporan Baru
+            </Button>
+          )}
           <Button variant="outline">
             <Download className="mr-2 h-4 w-4" />
             Export
@@ -160,6 +168,10 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
               Bulk Action ({selectedReports.length})
             </Button>
           )}
+          <Button variant="outline" size="sm">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -311,10 +323,16 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
                       </Button>
                     </>
                   )}
-                  {(userRole === 'sbu' && report.status === 'rejected') && (
+                   {(userRole === 'sbu' && report.status === 'rejected') && (
                     <Button variant="outline" size="sm">
                       <Edit className="mr-1 h-3 w-3" />
                       Upload Ulang
+                    </Button>
+                  )}
+                  {userRole === 'sbu' && (
+                    <Button variant="outline" size="sm">
+                      <Download className="mr-1 h-3 w-3" />
+                      Download
                     </Button>
                   )}
                 </div>
