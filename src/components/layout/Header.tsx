@@ -14,9 +14,10 @@ interface HeaderProps {
   userName: string;
   notificationCount: number;
   onMenuToggle?: () => void;
+  onSignOut?: () => void;
 }
 
-const Header = ({ userRole, userName, notificationCount, onMenuToggle }: HeaderProps) => {
+const Header = ({ userRole, userName, notificationCount, onMenuToggle, onSignOut }: HeaderProps) => {
   return (
     <header className="h-16 bg-gradient-to-r from-desmon-primary to-desmon-secondary text-white shadow-desmon-card border-b sticky top-0 z-50">
       <div className="h-full px-4 flex items-center justify-between">
