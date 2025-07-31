@@ -44,7 +44,7 @@ const Index = () => {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-foreground">DASMON+</h1>
-            <p className="text-muted-foreground">Dashboard for Enhancing Social and coMmunication Outreach from icoN+</p>
+            <p className="text-muted-foreground">Dashboard for Enhancing Social and Communication Outreach from icoN+</p>
           </div>
         </div>
 
@@ -53,7 +53,7 @@ const Index = () => {
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">Masuk ke Sistem</CardTitle>
             <CardDescription className="text-center">
-              Masukkan kredensial Anda untuk mengakses DESMON+
+              Masukkan kredensial Anda untuk mengakses DASMON+
             </CardDescription>
           </CardHeader>
           <CardContent>
