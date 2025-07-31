@@ -17,7 +17,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Auth />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/admin/*" element={<MainApp userRole="admin" userName="Admin Central" onSignOut={() => window.location.href = '/auth'} />} />
           <Route path="/sbu/*" element={<MainApp userRole="sbu" userName="User SBU" currentSBU="SBU Jawa Barat" onSignOut={() => window.location.href = '/auth'} />} />
