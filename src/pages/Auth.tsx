@@ -23,11 +23,11 @@ const Auth = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (loginData.email === "admin@dasmon.com") {
+      if (loginData.email === "admin@desmon.com") {
         navigate("/admin/dashboard");
         toast({ title: "Login Berhasil", description: "Selamat datang, Admin Ganteng!" });
       } else {
-        navigate("/sbu/dashboard");
+        navigate("/sbu/deshboard");
         toast({ title: "Login Berhasil", description: "Selamat datang di DASMON+!" });
       }
     } catch (error) {
