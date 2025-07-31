@@ -44,8 +44,8 @@ const Auth = () => {
           <div className="w-16 h-16 bg-gradient-to-r from-desmon-primary to-desmon-secondary rounded-2xl mx-auto flex items-center justify-center">
             <Shield className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-desmon-primary to-desmon-secondary bg-clip-text text-transparent">DESMON+</h1>
-          <p className="text-muted-foreground">Digital Excellence Score Monitoring</p>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-desmon-primary to-desmon-secondary bg-clip-text text-transparent">DASMON+</h1>
+          <p className="text-muted-foreground">Dashboard for Enhancing Social and Comunication Outreach from ICON+</p>
         </div>
 
         <Card>

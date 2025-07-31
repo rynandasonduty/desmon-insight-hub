@@ -23,7 +23,7 @@ const Index = () => {
     
     toast({
       title: "Login Berhasil",
-      description: `Selamat datang di DESMON+, ${userRole === 'admin' ? 'Admin Central' : 'SBU Jawa Barat'}!`,
+      description: `Selamat datang di DASMON+, ${userRole === 'admin' ? 'Admin Central' : 'SBU Jawa Barat'}!`,
     });
     
     // Navigate to appropriate dashboard
@@ -43,8 +43,8 @@ const Index = () => {
             <span className="text-2xl font-bold text-white">D+</span>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">DESMON+</h1>
-            <p className="text-muted-foreground">Sistema Pelaporan Terintegrasi</p>
+            <h1 className="text-3xl font-bold text-foreground">DASMON+</h1>
+            <p className="text-muted-foreground">Dashboard for Enhancing Social and coMmunication Outreach from icoN+</p>
           </div>
         </div>
 
