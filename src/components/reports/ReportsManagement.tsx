@@ -22,6 +22,9 @@ import {
   Upload,
   RefreshCw
 } from "lucide-react";
+import ReportDetailModal from "./ReportDetailModal";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface ReportsManagementProps {
   userRole: 'admin' | 'sbu';
@@ -86,6 +89,10 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
   const [statusFilter, setStatusFilter] = useState("all");
   const [indicatorFilter, setIndicatorFilter] = useState("all");
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
+  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   // Filter reports based on user role
   const filteredReports = mockReports.filter(report => {
@@ -136,6 +143,51 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
     }
   };
 
+  const handleViewDetail = (report: any) => {
+    setSelectedReport(report);
+    setDetailModalOpen(true);
+  };
+
+  const handleApproveReport = (reportId: string, notes?: string) => {
+    toast({
+      title: "Laporan Disetujui",
+      description: `Laporan telah disetujui${notes ? ' dengan catatan' : ''}.`,
+    });
+  };
+
+  const handleRejectReport = (reportId: string, reason: string) => {
+    toast({
+      title: "Laporan Ditolak",
+      description: "Laporan telah ditolak dengan alasan yang diberikan.",
+    });
+  };
+
+  const handleDownloadReport = (report: any) => {
+    toast({
+      title: "Mengunduh File",
+      description: `File ${report.fileName} sedang diunduh.`,
+    });
+  };
+
+  const handleUploadNew = () => {
+    const basePath = userRole === 'admin' ? '/admin' : '/sbu';
+    navigate(`${basePath}/upload`);
+  };
+
+  const handleExportReports = () => {
+    toast({
+      title: "Export Data",
+      description: "Data laporan sedang diekspor ke Excel.",
+    });
+  };
+
+  const handleRefreshData = () => {
+    toast({
+      title: "Data Diperbarui",
+      description: "Data laporan telah diperbarui dari database.",
+    });
+  };
+
   const indicatorTypes = ["Media Sosial", "Digital Marketing", "Website"];
 
   return (
@@ -154,12 +206,12 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
         </div>
         <div className="flex gap-2">
           {userRole === 'sbu' && (
-            <Button variant="hero">
+            <Button variant="hero" onClick={handleUploadNew}>
               <Upload className="mr-2 h-4 w-4" />
               Upload Laporan Baru
             </Button>
           )}
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExportReports}>
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -168,7 +220,7 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
               Bulk Action ({selectedReports.length})
             </Button>
           )}
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleRefreshData}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
@@ -307,34 +359,32 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => handleViewDetail(report)}>
                     <Eye className="mr-1 h-3 w-3" />
                     Detail
                   </Button>
                   {userRole === 'admin' && report.status === 'pending' && (
                     <>
-                      <Button variant="success" size="sm">
+                      <Button variant="success" size="sm" onClick={() => handleApproveReport(report.id)}>
                         <CheckCircle className="mr-1 h-3 w-3" />
                         Setujui
                       </Button>
-                      <Button variant="destructive" size="sm">
+                      <Button variant="destructive" size="sm" onClick={() => handleRejectReport(report.id, "")}>
                         <XCircle className="mr-1 h-3 w-3" />
                         Tolak
                       </Button>
                     </>
                   )}
                    {(userRole === 'sbu' && report.status === 'rejected') && (
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={handleUploadNew}>
                       <Edit className="mr-1 h-3 w-3" />
                       Upload Ulang
                     </Button>
                   )}
-                  {userRole === 'sbu' && (
-                    <Button variant="outline" size="sm">
-                      <Download className="mr-1 h-3 w-3" />
-                      Download
-                    </Button>
-                  )}
+                  <Button variant="outline" size="sm" onClick={() => handleDownloadReport(report)}>
+                    <Download className="mr-1 h-3 w-3" />
+                    Download
+                  </Button>
                 </div>
               </div>
             ))}
@@ -348,6 +398,21 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
           </div>
         </CardContent>
       </Card>
+
+      {/* Report Detail Modal */}
+      {selectedReport && (
+        <ReportDetailModal
+          isOpen={detailModalOpen}
+          onClose={() => {
+            setDetailModalOpen(false);
+            setSelectedReport(null);
+          }}
+          report={selectedReport}
+          userRole={userRole}
+          onApprove={handleApproveReport}
+          onReject={handleRejectReport}
+        />
+      )}
     </div>
   );
 };

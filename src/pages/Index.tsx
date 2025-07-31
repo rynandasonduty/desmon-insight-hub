@@ -9,6 +9,7 @@ import { LogIn, Building2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
+  const navigate = useNavigate();
   const [userRole, setUserRole] = useState<'admin' | 'sbu'>('admin');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();

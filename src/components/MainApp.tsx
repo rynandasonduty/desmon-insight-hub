@@ -15,7 +15,8 @@ import NotificationCenter from "./notifications/NotificationCenter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Check, X, Clock, FileText, Filter } from "lucide-react";
+import { Eye, Check, X, Clock, FileText, Filter, Upload, BarChart3 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface MainAppProps {
   userRole: 'admin' | 'sbu';
@@ -28,6 +29,14 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleSignOut = () => {
+    if (onSignOut) {
+      onSignOut();
+    }
+    // Navigate to auth page
+    navigate('/auth');
+  };
   
   // Get current route from URL path
   const getCurrentRoute = () => {
@@ -61,7 +70,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
         userName={userName}
         notificationCount={3}
         onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        onSignOut={onSignOut}
+        onSignOut={handleSignOut}
         onNotificationClick={handleNotificationClick}
       />
       
@@ -112,57 +121,118 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
 };
 
 // Dashboard View Component
-const DashboardView = ({ userRole }: { userRole: 'admin' | 'sbu' }) => (
-  <div className="space-y-6">
-    <div>
-      <h1 className="text-3xl font-bold">Dashboard</h1>
-      <p className="text-muted-foreground">
-        {userRole === 'admin' 
-          ? 'Selamat datang di panel admin DESMON+' 
-          : 'Selamat datang di portal pelaporan DESMON+'
-        }
-      </p>
-    </div>
+const DashboardView = ({ userRole }: { userRole: 'admin' | 'sbu' }) => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleQuickAction = (action: string) => {
+    const basePath = userRole === 'admin' ? '/admin' : '/sbu';
     
-    <DashboardStats userRole={userRole} />
-    
-    <div className="grid gap-6 lg:grid-cols-2">
-      <RecentActivity />
+    switch (action) {
+      case 'upload':
+        navigate(`${basePath}/upload`);
+        break;
+      case 'reports':
+        navigate(`${basePath}/reports`);
+        break;
+      case 'approval':
+        navigate(`${basePath}/approval`);
+        break;
+      case 'analytics':
+        navigate(`${basePath}/analytics`);
+        break;
+      default:
+        toast({
+          title: "Fitur Tersedia",
+          description: "Fungsi ini akan segera tersedia.",
+        });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground">
+          {userRole === 'admin' 
+            ? 'Selamat datang di panel admin DESMON+' 
+            : 'Selamat datang di portal pelaporan DESMON+'
+          }
+        </p>
+      </div>
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Aksi cepat yang sering digunakan</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {userRole === 'sbu' ? (
-            <>
-              <Button variant="hero" className="w-full justify-start">
-                <FileText className="mr-2 h-4 w-4" />
-                Upload Laporan Baru
-              </Button>
-              <Button variant="outline" className="w-full justify-start">
-                <Eye className="mr-2 h-4 w-4" />
-                Lihat Status Laporan
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="hero" className="w-full justify-start">
-                <Check className="mr-2 h-4 w-4" />
-                Review Laporan Pending
-              </Button>
-              <Button variant="outline" className="w-full justify-start">
-                <FileText className="mr-2 h-4 w-4" />
-                Generate Report
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      <DashboardStats userRole={userRole} />
+      
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RecentActivity />
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>Aksi cepat yang sering digunakan</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {userRole === 'sbu' ? (
+              <>
+                <Button 
+                  variant="hero" 
+                  className="w-full justify-start"
+                  onClick={() => handleQuickAction('upload')}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Laporan Baru
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => handleQuickAction('reports')}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  Lihat Status Laporan
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => handleQuickAction('analytics')}
+                >
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Lihat Analytics
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button 
+                  variant="hero" 
+                  className="w-full justify-start"
+                  onClick={() => handleQuickAction('approval')}
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  Review Laporan Pending
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => handleQuickAction('reports')}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Kelola Laporan
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => handleQuickAction('analytics')}
+                >
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Lihat Analytics
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Removed mock components as they're now in separate files
 
