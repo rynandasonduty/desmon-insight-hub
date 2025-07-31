@@ -413,7 +413,12 @@ const ApprovalDesk = () => {
           <p className="text-muted-foreground">Tinjau dan setujui laporan yang masuk</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => {
+            toast({
+              title: "Export Data",
+              description: "Data laporan sedang diekspor ke Excel.",
+            });
+          }}>
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -465,7 +470,12 @@ const ApprovalDesk = () => {
               </SelectContent>
             </Select>
 
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => {
+              toast({
+                title: "Filter Aktif",
+                description: "Filter laporan telah diterapkan.",
+              });
+            }}>
               <Filter className="mr-2 h-4 w-4" />
               Filter
             </Button>

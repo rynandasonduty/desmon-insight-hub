@@ -13,7 +13,7 @@ interface StatsCardProps {
 }
 
 const StatsCard = ({ title, value, description, icon, trend }: StatsCardProps) => (
-  <Card className="hover:shadow-desmon-hover transition-all duration-200">
+  <Card className="hover:shadow-desmon-hover transition-all duration-200 cursor-pointer hover:scale-105">
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
       <div className="text-desmon-secondary">{icon}</div>

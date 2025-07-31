@@ -100,7 +100,7 @@ const RecentActivity = () => {
       </CardHeader>
       <CardContent className="space-y-4">
         {activities.map((activity) => (
-          <div key={activity.id} className="flex items-start gap-4 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+          <div key={activity.id} className="flex items-start gap-4 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer hover:shadow-sm">
             <Avatar className="h-10 w-10">
               <AvatarFallback className="bg-desmon-secondary/10 text-desmon-primary">
                 {getUserInitials(activity.user)}

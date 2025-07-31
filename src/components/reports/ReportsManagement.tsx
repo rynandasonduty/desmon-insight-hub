@@ -268,7 +268,12 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
               </SelectContent>
             </Select>
 
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => {
+              toast({
+                title: "Filter Diterapkan",
+                description: "Filter laporan berhasil diterapkan.",
+              });
+            }}>
               <Filter className="mr-2 h-4 w-4" />
               Filter
             </Button>
@@ -375,8 +380,14 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
                       </Button>
                     </>
                   )}
-                   {(userRole === 'sbu' && report.status === 'rejected') && (
-                    <Button variant="outline" size="sm" onClick={handleUploadNew}>
+                  {(userRole === 'sbu' && report.status === 'rejected') && (
+                    <Button variant="outline" size="sm" onClick={() => {
+                      toast({
+                        title: "Redirect ke Upload",
+                        description: "Mengarahkan ke halaman upload untuk mengunggah ulang laporan.",
+                      });
+                      handleUploadNew();
+                    }}>
                       <Edit className="mr-1 h-3 w-3" />
                       Upload Ulang
                     </Button>

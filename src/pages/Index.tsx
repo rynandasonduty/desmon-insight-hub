@@ -13,7 +13,6 @@ const Index = () => {
   const [userRole, setUserRole] = useState<'admin' | 'sbu'>('admin');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
