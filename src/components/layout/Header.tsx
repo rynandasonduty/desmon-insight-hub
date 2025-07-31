@@ -40,7 +40,7 @@ const Header = ({ userRole, userName, notificationCount, onMenuToggle, onSignOut
             </div>
             <div>
               <h1 className="text-xl font-bold">DASMON+</h1>
-              <p className="text-xs opacity-90">Dashboard for Enhancing Social and coMmunication Outreach from icoN+</p>
+              <p className="text-xs opacity-90">Dashboard for Enhancing Social and Communication Outreach from ICON+</p>
             </div>
           </div>
         </div>

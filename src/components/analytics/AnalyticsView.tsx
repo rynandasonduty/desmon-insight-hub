@@ -101,7 +101,7 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             </div>
           </h1>
           <p className="text-muted-foreground">
-            Visualisasi kinerja dan insight data real-time DESMON+
+            Visualisasi kinerja dan insight data real-time DASMON+
             {userRole === 'sbu' && (
               <span className="block text-sm text-primary font-medium">
                 Data untuk {currentSBU}
