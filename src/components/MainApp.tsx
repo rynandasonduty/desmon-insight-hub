@@ -156,7 +156,7 @@ const DashboardView = ({ userRole }: { userRole: 'admin' | 'sbu' }) => {
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">
           {userRole === 'admin' 
-            ? 'Selamat datang di panel admin DASMON+' 
+            ? 'Selamat datang di panel admin DASMON+, Admin Ganteng!😋' 
             : 'Selamat datang di portal pelaporan DASMON+'
           }
         </p>
