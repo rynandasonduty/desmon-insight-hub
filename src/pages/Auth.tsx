@@ -45,7 +45,7 @@ const Auth = () => {
             <Shield className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-desmon-primary to-desmon-secondary bg-clip-text text-transparent">DASHMON+</h1>
-          <p className="text-muted-foreground">Dashboard for Enhancing Heartfelt Social and Communication Outreach from ICON+</p>
+          <p className="text-muted-foreground">Dashboard of Achievement for Social Humanity and Communication Outreach from ICON+</p>
         </div>
 
         <Card>
