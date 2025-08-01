@@ -119,12 +119,17 @@ const UploadInterface = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       // Call edge function
+      console.log('Calling edge function with user:', user.id);
+      console.log('Session token exists:', !!session?.access_token);
+      
       const { data, error } = await supabase.functions.invoke('process-report-upload', {
         body: formData,
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
         }
       });
+      
+      console.log('Edge function response:', { data, error });
 
       if (error) {
         throw new Error(error.message);

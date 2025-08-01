@@ -34,8 +34,9 @@ serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (authHeader) {
-      supabaseClient.auth.setSession({
-        access_token: authHeader.replace('Bearer ', ''),
+      const token = authHeader.replace('Bearer ', '');
+      await supabaseClient.auth.setSession({
+        access_token: token,
         refresh_token: '',
       });
     }
