@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Eye, EyeOff, Shield, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -16,22 +17,86 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Get user profile to determine role
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profile) {
+          if (profile.role === 'admin') {
+            navigate('/admin/dashboard');
+          } else {
+            navigate('/sbu/dashboard');
+          }
+        }
+      }
+    };
+    
+    checkAuth();
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Attempting login with:', loginData.email);
       
-      if (loginData.email === "admin@dasmon.com") {
-        navigate("/admin/dashboard");
-        toast({ title: "Login Berhasil", description: "Selamat datang, Admin Ganteng!" });
-      } else {
-        navigate("/sbu/deshboard");
-        toast({ title: "Login Berhasil", description: "Selamat datang di DASMON+!" });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginData.email,
+        password: loginData.password,
+      });
+
+      if (error) {
+        console.error('Login error:', error);
+        throw error;
       }
-    } catch (error) {
-      toast({ title: "Login Gagal", description: "Email atau password salah.", variant: "destructive" });
+
+      if (data.user) {
+        console.log('Login successful, user:', data.user.id);
+        
+        // Get user profile to determine role
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role, full_name')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError) {
+          console.error('Profile fetch error:', profileError);
+          throw new Error('Gagal memuat profil pengguna');
+        }
+
+        console.log('User profile:', profile);
+
+        if (profile) {
+          toast({ 
+            title: "Login Berhasil", 
+            description: `Selamat datang, ${profile.full_name}!` 
+          });
+
+          // Redirect based on role
+          if (profile.role === 'admin') {
+            navigate("/admin/dashboard");
+          } else {
+            navigate("/sbu/dashboard");
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      toast({ 
+        title: "Login Gagal", 
+        description: error.message || "Email atau password salah.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -50,17 +115,7 @@ const Auth = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Demo Credentials</CardTitle>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <Badge variant="outline">Admin</Badge>
-                <span className="text-sm">admin@dasmon.com / admin123</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <Badge variant="outline">SBU User</Badge>
-                <span className="text-sm">sbu@dasmon.com / sbu123</span>
-              </div>
-            </div>
+            <CardTitle>Login ke DASHMON+</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
