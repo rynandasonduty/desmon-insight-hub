@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -101,12 +102,23 @@ const UploadInterface = () => {
 
     try {
       // Get current user
+      console.log('🔐 Getting current user...');
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         throw new Error("User tidak terautentikasi");
       }
+      console.log('✅ User authenticated:', user.id);
+
+      // Get session for authorization
+      console.log('🔐 Getting session...');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error("Session tidak valid");
+      }
+      console.log('✅ Session obtained');
 
       // Create FormData
+      console.log('📝 Creating form data...');
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('indicator_type', selectedIndicator);
@@ -115,60 +127,87 @@ const UploadInterface = () => {
       setProcessStatus("Mengunggah file...");
       setUploadProgress(25);
 
-      // Get session for authorization
-      const { data: { session } } = await supabase.auth.getSession();
-      
       // Call edge function
-      console.log('Calling edge function with user:', user.id);
-      console.log('Session token exists:', !!session?.access_token);
+      console.log('🚀 Calling edge function...');
+      console.log('📋 Upload details:', {
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        indicator: selectedIndicator,
+        userId: user.id
+      });
       
       const { data, error } = await supabase.functions.invoke('process-report-upload', {
         body: formData,
         headers: {
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${session.access_token}`,
         }
       });
       
-      console.log('Edge function response:', { data, error });
+      console.log('📨 Edge function response received:', { data, error });
 
       if (error) {
-        throw new Error(error.message);
+        console.error('❌ Edge function error:', error);
+        throw new Error(error.message || 'Terjadi kesalahan saat memproses file');
       }
 
       setProcessStatus("Memproses data...");
       setUploadProgress(50);
 
-      // Simulate processing steps
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Check response
+      if (!data) {
+        throw new Error('Tidak ada response dari server');
+      }
+
+      if (!data.success) {
+        console.error('❌ Upload failed:', data.error);
+        throw new Error(data.error || 'Upload gagal');
+      }
+
       setProcessStatus("Validasi dan kalkulasi skor...");
       setUploadProgress(75);
 
+      // Simulate processing steps for user feedback
       await new Promise(resolve => setTimeout(resolve, 1000));
       setProcessStatus("Menyimpan ke database...");
       setUploadProgress(100);
 
-      if (data.success) {
-        toast({
-          title: "Upload Berhasil",
-          description: `File berhasil diproses. Skor: ${data.score}. Laporan ID: ${data.report_id}`,
-        });
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-        // Reset form
-        setSelectedFile(null);
-        setSelectedIndicator("");
-        setUploadProgress(0);
-        setProcessStatus("");
-      } else {
-        throw new Error(data.error || 'Upload gagal');
-      }
+      console.log('🎉 Upload successful!', {
+        reportId: data.report_id,
+        score: data.score
+      });
+
+      toast({
+        title: "Upload Berhasil!",
+        description: `File berhasil diproses dan disimpan. Skor: ${data.score || 'N/A'}. Report ID: ${data.report_id}`,
+      });
+
+      // Reset form
+      setSelectedFile(null);
+      setSelectedIndicator("");
+      setUploadProgress(0);
+      setProcessStatus("");
+
+      // Refresh the page or navigate to reports to see the uploaded file
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
       
     } catch (error: any) {
-      console.error('Upload error:', error);
+      console.error('💥 Upload error:', error);
+      
+      let errorMessage = "Terjadi kesalahan saat mengunggah file.";
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Upload Gagal",
-        description: error.message || "Terjadi kesalahan saat mengunggah file. Silakan coba lagi.",
+        description: errorMessage,
         variant: "destructive"
       });
+      
       setUploadProgress(0);
       setProcessStatus("");
     } finally {
