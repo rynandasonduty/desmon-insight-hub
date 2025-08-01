@@ -4,13 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, Download, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, Download, FileSpreadsheet, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Progress } from "@/components/ui/progress";
 
 const UploadInterface = () => {
   const [selectedIndicator, setSelectedIndicator] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processStatus, setProcessStatus] = useState<string>("");
   const { toast } = useToast();
 
   const indicators = [
@@ -92,26 +96,76 @@ const UploadInterface = () => {
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
+    setProcessStatus("Menyiapkan upload...");
 
     try {
-      // Simulate upload process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error("User tidak terautentikasi");
+      }
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('indicator_type', selectedIndicator);
+      formData.append('user_id', user.id);
+
+      setProcessStatus("Mengunggah file...");
+      setUploadProgress(25);
+
+      // Get session for authorization
+      const { data: { session } } = await supabase.auth.getSession();
       
-      toast({
-        title: "Upload Berhasil",
-        description: "File Anda sedang diproses oleh sistem ETL. Anda akan menerima notifikasi setelah selesai.",
+      // Call edge function
+      const { data, error } = await supabase.functions.invoke('process-report-upload', {
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        }
       });
 
-      // Reset form
-      setSelectedFile(null);
-      setSelectedIndicator("");
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setProcessStatus("Memproses data...");
+      setUploadProgress(50);
+
+      // Simulate processing steps
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setProcessStatus("Validasi dan kalkulasi skor...");
+      setUploadProgress(75);
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setProcessStatus("Menyimpan ke database...");
+      setUploadProgress(100);
+
+      if (data.success) {
+        toast({
+          title: "Upload Berhasil",
+          description: `File berhasil diproses. Skor: ${data.score}. Laporan ID: ${data.report_id}`,
+        });
+
+        // Reset form
+        setSelectedFile(null);
+        setSelectedIndicator("");
+        setUploadProgress(0);
+        setProcessStatus("");
+      } else {
+        throw new Error(data.error || 'Upload gagal');
+      }
       
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Upload error:', error);
       toast({
         title: "Upload Gagal",
-        description: "Terjadi kesalahan saat mengunggah file. Silakan coba lagi.",
+        description: error.message || "Terjadi kesalahan saat mengunggah file. Silakan coba lagi.",
         variant: "destructive"
       });
+      setUploadProgress(0);
+      setProcessStatus("");
     } finally {
       setIsUploading(false);
     }
@@ -231,6 +285,23 @@ const UploadInterface = () => {
             </p>
           </div>
 
+          {/* Progress Indicator */}
+          {isUploading && (
+            <div className="space-y-3 p-4 bg-desmon-background/30 rounded-lg border border-desmon-secondary/20">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Progress Upload</span>
+                <span className="text-sm text-muted-foreground">{uploadProgress}%</span>
+              </div>
+              <Progress value={uploadProgress} className="w-full" />
+              {processStatus && (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-desmon-primary" />
+                  <span className="text-sm text-muted-foreground">{processStatus}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Upload Button */}
           <div className="flex justify-end">
             <Button 
@@ -241,8 +312,8 @@ const UploadInterface = () => {
             >
               {isUploading ? (
                 <>
-                  <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                  Mengunggah...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Memproses...
                 </>
               ) : (
                 <>
