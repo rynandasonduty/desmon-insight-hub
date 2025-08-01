@@ -49,6 +49,17 @@ const Auth = () => {
     try {
       console.log('Attempting login with:', loginData.email);
       
+      // Demo admin bypass
+      if (loginData.email === "admin@dashmon.com" && loginData.password === "admin123") {
+        toast({ 
+          title: "Login Berhasil", 
+          description: "Selamat datang, Admin Demo!" 
+        });
+        navigate("/admin/dashboard");
+        setIsLoading(false);
+        return;
+      }
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email: loginData.email,
         password: loginData.password,
@@ -116,6 +127,10 @@ const Auth = () => {
         <Card>
           <CardHeader>
             <CardTitle>Login ke DASHMON+</CardTitle>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <div>Demo Admin: admin@dashmon.com / admin123</div>
+              <div>Atau gunakan akun yang sudah dibuat di sistem</div>
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
