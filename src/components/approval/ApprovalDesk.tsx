@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,23 @@ import {
   XCircle
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+
+// Report interface
+interface Report {
+  id: string;
+  fileName: string;
+  submittedBy: string;
+  sbu: string;
+  submittedAt: string;
+  status: string;
+  indicatorType: string;
+  rawData: any;
+  processedData: any;
+  calculatedScore: number | null;
+  fileSize: string;
+  videoLinks: string[];
+  rejectionReason?: string;
+}
 
 // Mock data for detailed reports
 const mockDetailedReports = [
@@ -107,7 +125,7 @@ const mockDetailedReports = [
 ];
 
 interface ReportDetailProps {
-  report: any;
+  report: Report;
   onApprove: (reportId: string, note?: string) => void;
   onReject: (reportId: string, reason: string) => void;
 }
@@ -337,7 +355,66 @@ const ApprovalDesk = () => {
   const [sbuFilter, setSbuFilter] = useState("all");
   const [indicatorFilter, setIndicatorFilter] = useState("all");
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
-  const [reports, setReports] = useState(mockDetailedReports);
+  const [reports, setReports] = useState<Report[]>(mockDetailedReports);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch real reports from database
+  const fetchReports = async () => {
+    try {
+      setIsLoading(true);
+      const { data: reportsData, error } = await supabase
+        .from('reports')
+        .select(`
+          *,
+          profiles!reports_user_id_fkey(full_name, sbu_name)
+        `)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching reports:', error);
+        toast({
+          title: "Error",
+          description: "Gagal mengambil data laporan dari database",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (reportsData && reportsData.length > 0) {
+        // Transform database data to match our component structure
+        const transformedReports: Report[] = reportsData.map(report => ({
+          id: report.id,
+          fileName: report.file_name,
+          submittedBy: report.profiles?.full_name || 'Unknown User',
+          sbu: report.profiles?.sbu_name || 'Unknown SBU',
+          submittedAt: new Date(report.created_at).toLocaleString('id-ID'),
+          status: report.approved_at ? 'approved' : 'pending',
+          indicatorType: report.indicator_type,
+          rawData: typeof report.raw_data === 'object' ? report.raw_data : {},
+          processedData: typeof report.processed_data === 'object' ? report.processed_data : {},
+          calculatedScore: report.calculated_score,
+          fileSize: "N/A",
+          videoLinks: Array.isArray(report.video_links) ? report.video_links.filter(link => typeof link === 'string') as string[] : [],
+          rejectionReason: report.rejection_reason || undefined
+        }));
+        
+        // Use only real data from database
+        setReports(transformedReports);
+      } else {
+        // Show mock data if no real data
+        setReports(mockDetailedReports);
+      }
+    } catch (error) {
+      console.error('Error in fetchReports:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
 
   const filteredReports = reports.filter(report => {
     if (searchTerm && !report.fileName.toLowerCase().includes(searchTerm.toLowerCase()) && 
@@ -365,31 +442,84 @@ const ApprovalDesk = () => {
     }
   };
 
-  const handleApprove = (reportId: string, note?: string) => {
-    setReports(prev => prev.map(report => 
-      report.id === reportId 
-        ? { ...report, status: 'approved', calculatedScore: Math.round(Math.random() * 30 + 70) }
-        : report
-    ));
-    
-    toast({
-      title: "Laporan Disetujui",
-      description: "Laporan berhasil disetujui dan score telah dihitung",
-    });
+  const handleApprove = async (reportId: string, note?: string) => {
+    try {
+      // Update in database
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          approved_by: (await supabase.auth.getUser()).data.user?.id
+        })
+        .eq('id', reportId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      setReports(prev => prev.map(report => 
+        report.id === reportId 
+          ? { ...report, status: 'approved', calculatedScore: Math.round(Math.random() * 30 + 70) }
+          : report
+      ));
+      
+      toast({
+        title: "Laporan Disetujui",
+        description: "Laporan berhasil disetujui dan disimpan ke database",
+      });
+
+      // Refresh data
+      await fetchReports();
+    } catch (error: any) {
+      console.error('Error approving report:', error);
+      toast({
+        title: "Error",
+        description: "Gagal menyetujui laporan: " + error.message,
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleReject = (reportId: string, reason: string) => {
-    setReports(prev => prev.map(report => 
-      report.id === reportId 
-        ? { ...report, status: 'rejected', rejectionReason: reason }
-        : report
-    ));
-    
-    toast({
-      title: "Laporan Ditolak", 
-      description: "Laporan telah ditolak dengan alasan yang diberikan",
-      variant: "destructive",
-    });
+  const handleReject = async (reportId: string, reason: string) => {
+    try {
+      // Update in database
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'rejected',
+          rejection_reason: reason
+        })
+        .eq('id', reportId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      setReports(prev => prev.map(report => 
+        report.id === reportId 
+          ? { ...report, status: 'rejected', rejectionReason: reason }
+          : report
+      ));
+      
+      toast({
+        title: "Laporan Ditolak", 
+        description: "Laporan telah ditolak dan disimpan ke database",
+        variant: "destructive",
+      });
+
+      // Refresh data
+      await fetchReports();
+    } catch (error: any) {
+      console.error('Error rejecting report:', error);
+      toast({
+        title: "Error",
+        description: "Gagal menolak laporan: " + error.message,
+        variant: "destructive"
+      });
+    }
   };
 
   const handleBulkApprove = () => {
