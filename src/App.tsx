@@ -106,12 +106,15 @@ const App = () => {
               )
             } />
             <Route path="/admin/*" element={
-              // Allow demo admin bypass or authenticated admin users
-              <MainApp 
-                userRole="admin" 
-                userName={userProfile?.full_name || "Admin Demo"} 
-                onSignOut={handleSignOut} 
-              />
+              session && userProfile?.role === 'admin' ? (
+                <MainApp 
+                  userRole="admin" 
+                  userName={userProfile.full_name} 
+                  onSignOut={handleSignOut} 
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             } />
             <Route path="/sbu/*" element={
               session && userProfile?.role === 'sbu' ? (

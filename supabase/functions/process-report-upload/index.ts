@@ -14,11 +14,9 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🚀 Starting report upload process...');
-    
     const supabaseClient = createClient(
-      'https://vzpyamvunnhlzypzdbpf.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ6cHlhbXZ1bm5obHp5cHpkYnBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM3ODQ0MzIsImV4cCI6MjA2OTM2MDQzMn0.UaU6mywmh6_3szVV3CwPc3Q7aiyRxSeY8Ivb_yBryB0',
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
         auth: {
           persistSession: false,
@@ -28,11 +26,9 @@ serve(async (req) => {
 
     // Get and set auth token
     const authHeader = req.headers.get('Authorization');
-    console.log('🔑 Auth header exists:', !!authHeader);
     
     if (authHeader) {
       const token = authHeader.replace('Bearer ', '');
-      console.log('🔑 Setting session with token...');
       
       const { data: sessionData, error: sessionError } = await supabaseClient.auth.setSession({
         access_token: token,
@@ -40,11 +36,8 @@ serve(async (req) => {
       });
       
       if (sessionError) {
-        console.error('❌ Session error:', sessionError);
         throw new Error(`Authentication failed: ${sessionError.message}`);
       }
-      
-      console.log('✅ Session set successfully');
     }
 
     // Parse form data

@@ -188,11 +188,6 @@ const UploadInterface = () => {
       setSelectedIndicator("");
       setUploadProgress(0);
       setProcessStatus("");
-
-      // Refresh the page or navigate to reports to see the uploaded file
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
       
     } catch (error: any) {
       console.error('💥 Upload error:', error);
