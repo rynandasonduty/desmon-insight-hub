@@ -192,7 +192,7 @@ const UserManagement = () => {
 
     // Panggil Edge Function delete-user yang baru
     const { data, error } = await supabase.functions.invoke('delete-user', {
-      body: { userId: id },
+      body: JSON.stringify({ userId: id }),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
