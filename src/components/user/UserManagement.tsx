@@ -184,11 +184,10 @@ const UserManagement = () => {
     try {
       setLoading(true);
       
-      // Delete the profile from database
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', id);
+      // Call edge function to delete user from auth.users (will cascade to profiles)
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId: id }
+      });
 
       if (error) throw error;
 

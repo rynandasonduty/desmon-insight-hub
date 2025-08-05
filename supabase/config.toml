@@ -36,3 +36,6 @@ verify_jwt = true
 
 [functions.process-report-worker]
 verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = true
