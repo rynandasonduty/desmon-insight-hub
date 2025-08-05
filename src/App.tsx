@@ -36,15 +36,25 @@ const App = () => {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          console.log('User profile fetched:', profile);
-          setUserProfile(profile as UserProfile);
+          try {
+            // Fetch user profile
+            const { data: profile, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (error) {
+              console.error('Error fetching profile:', error);
+              setUserProfile(null);
+            } else {
+              console.log('User profile fetched:', profile);
+              setUserProfile(profile as UserProfile);
+            }
+          } catch (error) {
+            console.error('Profile fetch error:', error);
+            setUserProfile(null);
+          }
         } else {
           setUserProfile(null);
         }
@@ -59,16 +69,30 @@ const App = () => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: profile }) => {
-            console.log('Initial profile fetch:', profile);
-            setUserProfile(profile as UserProfile);
+        const fetchProfile = async () => {
+          try {
+            const { data: profile, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (error) {
+              console.error('Initial profile fetch error:', error);
+              setUserProfile(null);
+            } else {
+              console.log('Initial profile fetch:', profile);
+              setUserProfile(profile as UserProfile);
+            }
+          } catch (error) {
+            console.error('Profile fetch catch error:', error);
+            setUserProfile(null);
+          } finally {
             setLoading(false);
-          });
+          }
+        };
+        
+        fetchProfile();
       } else {
         setLoading(false);
       }
