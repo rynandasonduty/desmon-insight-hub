@@ -52,7 +52,16 @@ serve(async (req) => {
       );
     }
 
-    const { userId } = await req.json();
+    let userId;
+    try {
+      const body = await req.json();
+      userId = body.userId;
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Body request harus berupa JSON dan tidak boleh kosong' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (!userId) {
       return new Response(
