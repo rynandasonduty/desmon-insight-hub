@@ -4,8 +4,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import MainApp from "./components/MainApp";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,74 +26,49 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
+    // Fungsi terpusat untuk menangani sesi dan profil
+    const handleAuth = async (session: Session | null) => {
+      try {
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          try {
-            // Fetch user profile
-            const { data: profile, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (error) {
-              console.error('Error fetching profile:', error);
-              setUserProfile(null);
-            } else {
-              console.log('User profile fetched:', profile);
-              setUserProfile(profile as UserProfile);
-            }
-          } catch (error) {
-            console.error('Profile fetch error:', error);
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (error) {
+            console.error('Error fetching profile:', error);
             setUserProfile(null);
+          } else {
+            setUserProfile(profile as UserProfile);
           }
         } else {
           setUserProfile(null);
         }
+      } catch (error) {
+        console.error('Auth handler error:', error);
+        setUserProfile(null);
+      } finally {
+        // SELALU atur loading ke false setelah proses selesai
         setLoading(false);
+      }
+    };
+    
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
+        handleAuth(session);
       }
     );
 
-    // Check for existing session
+    // Pengecekan awal sesi
     supabase.auth.getSession().then(({ data: { session } }) => {
       console.log('Initial session check:', session?.user?.id);
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const fetchProfile = async () => {
-          try {
-            const { data: profile, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (error) {
-              console.error('Initial profile fetch error:', error);
-              setUserProfile(null);
-            } else {
-              console.log('Initial profile fetch:', profile);
-              setUserProfile(profile as UserProfile);
-            }
-          } catch (error) {
-            console.error('Profile fetch catch error:', error);
-            setUserProfile(null);
-          } finally {
-            setLoading(false);
-          }
-        };
-        
-        fetchProfile();
-      } else {
-        setLoading(false);
-      }
+      handleAuth(session);
     });
 
     return () => subscription.unsubscribe();
@@ -104,7 +77,6 @@ const App = () => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setUserProfile(null);
-    window.location.href = '/';
   };
 
   if (loading) {
@@ -115,6 +87,14 @@ const App = () => {
     );
   }
 
+  // Logika routing
+  let initialRoute = '/';
+  if (session && userProfile) {
+    initialRoute = userProfile.role === 'admin' ? '/admin/dashboard' : '/sbu/dashboard';
+  } else if (!session) {
+    initialRoute = '/';
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -122,37 +102,10 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={
-              session && userProfile ? (
-                <Navigate to={userProfile.role === 'admin' ? '/admin/dashboard' : '/sbu/dashboard'} replace />
-              ) : (
-                <Auth />
-              )
-            } />
-            <Route path="/admin/*" element={
-              session && userProfile?.role === 'admin' ? (
-                <MainApp 
-                  userRole="admin" 
-                  userName={userProfile.full_name} 
-                  onSignOut={handleSignOut} 
-                />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            } />
-            <Route path="/sbu/*" element={
-              session && userProfile?.role === 'sbu' ? (
-                <MainApp 
-                  userRole="sbu" 
-                  userName={userProfile.full_name} 
-                  currentSBU={userProfile.sbu_name}
-                  onSignOut={handleSignOut} 
-                />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            } />
-            <Route path="*" element={<NotFound />} />
+            <Route path="/" element={session ? <Navigate to={initialRoute} replace /> : <Auth />} />
+            <Route path="/admin/*" element={session && userProfile?.role === 'admin' ? <MainApp userRole="admin" userName={userProfile.full_name} onSignOut={handleSignOut} /> : <Navigate to="/" replace />} />
+            <Route path="/sbu/*" element={session && userProfile?.role === 'sbu' ? <MainApp userRole="sbu" userName={userProfile.full_name} currentSBU={userProfile.sbu_name} onSignOut={handleSignOut} /> : <Navigate to="/" replace />} />
+            <Route path="*" element={<p>404 Not Found</p>} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

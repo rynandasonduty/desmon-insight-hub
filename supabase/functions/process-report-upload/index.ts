@@ -1,13 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-
-// Use XLSX library for Excel processing
-declare const XLSX: any;
-if (typeof XLSX === 'undefined') {
-  // Import XLSX for Excel file processing
-  await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
-}
+// Ubah kode yang salah di bawah ini
+// declare const XLSX: any;
+// if (typeof XLSX === 'undefined') {
+//   await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+// }
+// Menjadi:
+import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,7 +21,6 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 serve(async (req) => {
   console.log('📝 Dispatcher: Processing report upload request...');
   
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -35,7 +34,6 @@ serve(async (req) => {
       );
     }
 
-    // Get user from auth token
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
@@ -59,7 +57,6 @@ serve(async (req) => {
 
     console.log(`📋 Dispatcher: Processing file: ${file.name}, size: ${file.size}, type: ${file.type}`);
 
-    // Validate file type
     const allowedTypes = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'application/vnd.ms-excel'
@@ -72,8 +69,8 @@ serve(async (req) => {
       );
     }
 
-    // Read and parse Excel file for basic validation
     const arrayBuffer = await file.arrayBuffer();
+    // Baris ini sekarang akan berfungsi karena XLSX sudah diimpor
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
@@ -81,12 +78,10 @@ serve(async (req) => {
 
     console.log('📊 Dispatcher: Excel file parsed successfully');
 
-    // Create unique filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `${timestamp}_${file.name}`;
     const filePath = `uploads/${user.id}/${fileName}`;
 
-    // Upload file to Supabase Storage
     console.log(`☁️ Dispatcher: Uploading file to storage: ${filePath}`);
     const { error: uploadError } = await supabase.storage
       .from('report-uploads')
@@ -103,7 +98,6 @@ serve(async (req) => {
       );
     }
 
-    // Create report entry in database with 'queued' status for pg_cron processing
     console.log('💾 Dispatcher: Creating report entry in database...');
     const { data: reportData, error: dbError } = await supabase
       .from('reports')
@@ -121,7 +115,6 @@ serve(async (req) => {
     if (dbError) {
       console.error('❌ Dispatcher: Database error:', dbError);
       
-      // Clean up uploaded file if database insert failed
       await supabase.storage
         .from('report-uploads')
         .remove([filePath]);
@@ -134,12 +127,11 @@ serve(async (req) => {
 
     console.log(`✅ Dispatcher: Report created successfully with ID: ${reportData.id}`);
 
-    // Create immediate notification that report is queued
     const { error: notificationError } = await supabase
       .from('notifications')
       .insert({
         user_id: user.id,
-        type: 'report_processing', 
+        type: 'success', 
         title: 'Laporan Masuk Antrian',
         message: `Laporan "${file.name}" telah masuk ke antrian dan akan diproses oleh sistem dalam beberapa menit.`,
         related_report_id: reportData.id
@@ -149,7 +141,6 @@ serve(async (req) => {
       console.error('⚠️ Dispatcher: Notification creation error:', notificationError);
     }
 
-    // Return immediate success response - pg_cron will handle processing
     return new Response(
       JSON.stringify({
         success: true,
@@ -158,7 +149,7 @@ serve(async (req) => {
         status: 'queued'
       }),
       { 
-        status: 202, // Accepted - processing will be handled by pg_cron
+        status: 202,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
