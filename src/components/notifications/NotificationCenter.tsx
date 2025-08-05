@@ -14,119 +14,137 @@ import {
   Settings,
   AlertTriangle,
   TrendingUp,
-  Mail
+  Mail,
+  Loader2,
+  Upload
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Notification {
   id: string;
-  type: 'report_approved' | 'report_rejected' | 'report_submitted' | 'kpi_updated' | 'system' | 'user_activity';
+  type: 'report_approved' | 'report_rejected' | 'report_submitted' | 'kpi_updated' | 'system' | 'user_activity' | 'report_processing' | 'report_completed' | 'report_error';
   title: string;
   message: string;
-  createdAt: string;
-  isRead: boolean;
-  relatedReportId?: string;
-  priority: 'low' | 'medium' | 'high';
+  created_at: string;
+  is_read: boolean;
+  related_report_id?: string;
+  user_id: string;
 }
-
-// Mock data for notifications
-const mockNotifications: Notification[] = [
-  {
-    id: "notif-001",
-    type: "report_approved",
-    title: "Laporan Disetujui",
-    message: "Laporan Media Sosial Q4 2024.xlsx telah disetujui dengan score 85.5",
-    createdAt: "2024-01-16 09:15",
-    isRead: false,
-    relatedReportId: "RPT-001",
-    priority: "high"
-  },
-  {
-    id: "notif-002",
-    type: "report_submitted",
-    title: "Laporan Baru Masuk",
-    message: "Ahmad Sutanto (SBU Jawa Barat) telah mengsubmit laporan baru untuk review",
-    createdAt: "2024-01-15 14:30",
-    isRead: false,
-    relatedReportId: "RPT-002",
-    priority: "medium"
-  },
-  {
-    id: "notif-003",
-    type: "report_rejected",
-    title: "Laporan Ditolak",
-    message: "Website Analytics Dec 2023.xlsx ditolak karena data tidak lengkap",
-    createdAt: "2024-01-14 08:30",
-    isRead: true,
-    relatedReportId: "RPT-003",
-    priority: "high"
-  },
-  {
-    id: "notif-004",
-    type: "kpi_updated",
-    title: "KPI Diperbarui",
-    message: "Admin telah memperbarui definisi KPI untuk Media Sosial",
-    createdAt: "2024-01-13 16:20",
-    isRead: true,
-    priority: "low"
-  },
-  {
-    id: "notif-005",
-    type: "system",
-    title: "Maintenance Terjadwal",
-    message: "Sistem akan maintenance pada 20 Januari 2024 pukul 02:00-04:00 WIB",
-    createdAt: "2024-01-12 10:00",
-    isRead: false,
-    priority: "medium"
-  },
-  {
-    id: "notif-006",
-    type: "user_activity",
-    title: "User Baru Terdaftar",
-    message: "Siti Rahayu telah bergabung sebagai user SBU Jawa Tengah",
-    createdAt: "2024-01-11 14:45",
-    isRead: true,
-    priority: "low"
-  }
-];
 
 interface NotificationCenterProps {
   userRole: 'admin' | 'sbu';
 }
 
 const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
 
-  // Simulate real-time notifications
+  // Get current user ID and fetch notifications
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Add a new notification occasionally (every 2 minutes)
-      if (Math.random() < 0.3) {
-        const newNotification: Notification = {
-          id: `notif-${Date.now()}`,
-          type: ['report_submitted', 'kpi_updated', 'system'][Math.floor(Math.random() * 3)] as any,
-          title: ['Laporan Baru Masuk', 'KPI Diperbarui', 'Notifikasi Sistem'][Math.floor(Math.random() * 3)],
-          message: 'Notifikasi real-time dari sistem DESMON+',
-          createdAt: new Date().toLocaleString('id-ID'),
-          isRead: false,
-          priority: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)] as any
-        };
-        
-        setNotifications(prev => [newNotification, ...prev.slice(0, 9)]); // Keep only 10 notifications
+    const getCurrentUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setCurrentUserId(session.user.id);
+        await fetchNotifications(session.user.id);
       }
-    }, 120000); // Check every 2 minutes
+      setIsLoading(false);
+    };
 
-    return () => clearInterval(interval);
+    getCurrentUser();
   }, []);
 
+  // Fetch notifications from database
+  const fetchNotifications = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        toast({
+          title: "Gagal memuat notifikasi",
+          description: "Terjadi kesalahan saat memuat notifikasi",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setNotifications((data as Notification[]) || []);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
+
+  // Set up real-time subscription for notifications
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    console.log('Setting up real-time notification subscription for user:', currentUserId);
+
+    const channel = supabase
+      .channel('notification-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${currentUserId}`
+        },
+        (payload) => {
+          console.log('New notification received:', payload.new);
+          const newNotification = payload.new as Notification;
+          
+          setNotifications(prev => [newNotification, ...prev]);
+          
+          // Show toast for new notification
+          toast({
+            title: newNotification.title,
+            description: newNotification.message,
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${currentUserId}`
+        },
+        (payload) => {
+          console.log('Notification updated:', payload.new);
+          const updatedNotification = payload.new as Notification;
+          
+          setNotifications(prev => 
+            prev.map(notif => 
+              notif.id === updatedNotification.id ? updatedNotification : notif
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('Cleaning up notification subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
+
   const filteredNotifications = notifications.filter(notification => {
-    if (filter === 'unread') return !notification.isRead;
-    if (filter === 'read') return notification.isRead;
+    if (filter === 'unread') return !notification.is_read;
+    if (filter === 'read') return notification.is_read;
     return true;
   });
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -136,6 +154,12 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
         return <XCircle className="h-4 w-4 text-red-600" />;
       case 'report_submitted':
         return <FileText className="h-4 w-4 text-blue-600" />;
+      case 'report_processing':
+        return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />;
+      case 'report_completed':
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'report_error':
+        return <AlertTriangle className="h-4 w-4 text-red-600" />;
       case 'kpi_updated':
         return <TrendingUp className="h-4 w-4 text-purple-600" />;
       case 'system':
@@ -147,7 +171,23 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
     }
   };
 
-  const getPriorityBadge = (priority: string) => {
+  const getPriorityFromType = (type: string) => {
+    switch (type) {
+      case 'report_approved':
+      case 'report_rejected':
+      case 'report_error':
+        return 'high';
+      case 'report_processing':
+      case 'report_completed':
+      case 'report_submitted':
+        return 'medium';
+      default:
+        return 'low';
+    }
+  };
+
+  const getPriorityBadge = (type: string) => {
+    const priority = getPriorityFromType(type);
     switch (priority) {
       case 'high':
         return <Badge variant="destructive" className="text-xs">Tinggi</Badge>;
@@ -160,35 +200,83 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
     }
   };
 
-  const markAsRead = (notificationId: string) => {
-    setNotifications(prev => 
-      prev.map(notif => 
-        notif.id === notificationId 
-          ? { ...notif, isRead: true }
-          : notif
-      )
-    );
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId);
+
+      if (error) {
+        console.error('Error marking notification as read:', error);
+        return;
+      }
+
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === notificationId 
+            ? { ...notif, is_read: true }
+            : notif
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
-  const markAsUnread = (notificationId: string) => {
-    setNotifications(prev => 
-      prev.map(notif => 
-        notif.id === notificationId 
-          ? { ...notif, isRead: false }
-          : notif
-      )
-    );
+  const markAsUnread = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: false })
+        .eq('id', notificationId);
+
+      if (error) {
+        console.error('Error marking notification as unread:', error);
+        return;
+      }
+
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === notificationId 
+            ? { ...notif, is_read: false }
+            : notif
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as unread:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notif => ({ ...notif, isRead: true }))
-    );
-    
-    toast({
-      title: "Semua notifikasi ditandai sudah dibaca",
-      description: `${unreadCount} notifikasi telah ditandai sebagai sudah dibaca`,
-    });
+  const markAllAsRead = async () => {
+    try {
+      const unreadNotificationIds = notifications
+        .filter(n => !n.is_read)
+        .map(n => n.id);
+
+      if (unreadNotificationIds.length === 0) return;
+
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .in('id', unreadNotificationIds);
+
+      if (error) {
+        console.error('Error marking all notifications as read:', error);
+        return;
+      }
+
+      setNotifications(prev => 
+        prev.map(notif => ({ ...notif, is_read: true }))
+      );
+      
+      toast({
+        title: "Semua notifikasi ditandai sudah dibaca",
+        description: `${unreadCount} notifikasi telah ditandai sebagai sudah dibaca`,
+      });
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
   };
 
   const formatTimeAgo = (dateString: string) => {
@@ -296,11 +384,11 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
                 <div key={notification.id}>
                   <div 
                     className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                      !notification.isRead 
+                      !notification.is_read 
                         ? 'bg-primary/5 border-l-4 border-l-primary hover:bg-primary/10' 
                         : 'hover:bg-muted/50'
                     }`}
-                    onClick={() => !notification.isRead && markAsRead(notification.id)}
+                    onClick={() => !notification.is_read && markAsRead(notification.id)}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1">
@@ -310,11 +398,11 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
                         
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center gap-2">
-                            <h4 className={`font-medium ${!notification.isRead ? 'font-semibold' : ''}`}>
+                            <h4 className={`font-medium ${!notification.is_read ? 'font-semibold' : ''}`}>
                               {notification.title}
                             </h4>
-                            {getPriorityBadge(notification.priority)}
-                            {!notification.isRead && (
+                            {getPriorityBadge(notification.type)}
+                            {!notification.is_read && (
                               <div className="w-2 h-2 bg-primary rounded-full"></div>
                             )}
                           </div>
@@ -325,11 +413,11 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
                           
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
-                            {formatTimeAgo(notification.createdAt)}
-                            {notification.relatedReportId && (
+                            {formatTimeAgo(notification.created_at)}
+                            {notification.related_report_id && (
                               <>
                                 <span>•</span>
-                                <span>ID: {notification.relatedReportId}</span>
+                                <span>ID: {notification.related_report_id}</span>
                               </>
                             )}
                           </div>
@@ -337,7 +425,7 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
                       </div>
                       
                       <div className="flex gap-1">
-                        {notification.isRead ? (
+                        {notification.is_read ? (
                           <Button
                             variant="ghost"
                             size="sm"

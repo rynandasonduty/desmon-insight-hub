@@ -150,7 +150,7 @@ const UploadInterface = () => {
         throw new Error(error.message || 'Terjadi kesalahan saat memproses file');
       }
 
-      setProcessStatus("Memproses data...");
+      setProcessStatus("Memvalidasi file...");
       setUploadProgress(50);
 
       // Check response
@@ -163,24 +163,24 @@ const UploadInterface = () => {
         throw new Error(data.error || 'Upload gagal');
       }
 
-      setProcessStatus("Validasi dan kalkulasi skor...");
+      setProcessStatus("File diterima sistem...");
       setUploadProgress(75);
 
-      // Simulate processing steps for user feedback
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setProcessStatus("Menyimpan ke database...");
+      // Short delay for user feedback
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setProcessStatus("Laporan sedang diproses...");
       setUploadProgress(100);
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log('🎉 Upload successful!', {
+      console.log('🎉 Upload queued successfully!', {
         reportId: data.report_id,
-        score: data.score
+        status: data.status
       });
 
       toast({
-        title: "Upload Berhasil!",
-        description: `File berhasil diproses dan disimpan. Skor: ${data.score || 'N/A'}. Report ID: ${data.report_id}`,
+        title: "File Berhasil Diunggah!",
+        description: `Laporan sedang diproses di latar belakang. Anda akan mendapat notifikasi setelah selesai. Report ID: ${data.report_id}`,
       });
 
       // Reset form
