@@ -179,8 +179,8 @@ const UploadInterface = () => {
       });
 
       toast({
-        title: "File Berhasil Diunggah!",
-        description: `Laporan sedang diproses di latar belakang. Anda akan mendapat notifikasi setelah selesai. Report ID: ${data.report_id}`,
+        title: "Laporan Berhasil Diunggah!",
+        description: "Laporan Anda telah masuk ke antrian dan akan diproses dalam beberapa menit. Anda akan menerima notifikasi ketika proses selesai.",
       });
 
       // Reset form
@@ -352,7 +352,7 @@ const UploadInterface = () => {
               {isUploading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Memproses...
+                  Mengirim ke Antrian...
                 </>
               ) : (
                 <>

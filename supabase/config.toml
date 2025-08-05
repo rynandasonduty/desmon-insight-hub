@@ -32,4 +32,7 @@ enabled = true
 port = 54325
 
 [functions.process-report-upload]
+verify_jwt = true
+
+[functions.process-report-worker]
 verify_jwt = false
