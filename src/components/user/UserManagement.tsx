@@ -138,9 +138,7 @@ const UserManagement = () => {
       });
       
       // Refresh the users list
-      setTimeout(() => {
-        fetchUsers();
-      }, 1000);
+      fetchUsers();
     } catch (error: any) {
       toast({
         title: "Error",

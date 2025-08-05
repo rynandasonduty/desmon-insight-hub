@@ -112,7 +112,7 @@ serve(async (req) => {
         file_name: file.name,
         file_path: filePath,
         indicator_type: indicatorType,
-        status: 'queued', // Changed to queued for pg_cron
+        status: 'queued',
         raw_data: rawData
       })
       .select()
@@ -139,7 +139,7 @@ serve(async (req) => {
       .from('notifications')
       .insert({
         user_id: user.id,
-        type: 'report_processing',
+        type: 'report_processing', 
         title: 'Laporan Masuk Antrian',
         message: `Laporan "${file.name}" telah masuk ke antrian dan akan diproses oleh sistem dalam beberapa menit.`,
         related_report_id: reportData.id
