@@ -182,8 +182,9 @@ const UserManagement = () => {
 
   const handleDeleteUser = async (id: string) => {
     try {
-      // Note: This will only delete the profile. 
-      // In a real app, you'd also need to handle auth user deletion
+      setLoading(true);
+      
+      // Delete the profile from database
       const { error } = await supabase
         .from('profiles')
         .delete()
@@ -197,12 +198,15 @@ const UserManagement = () => {
       });
 
       fetchUsers();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
       toast({
         title: "Error",
-        description: "Gagal menghapus pengguna",
+        description: error.message || "Gagal menghapus pengguna",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
