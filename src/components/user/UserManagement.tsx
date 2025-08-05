@@ -181,33 +181,45 @@ const UserManagement = () => {
   };
 
   const handleDeleteUser = async (id: string) => {
-    try {
-      setLoading(true);
-      
-      // Call edge function to delete user from auth.users (will cascade to profiles)
-      const { data, error } = await supabase.functions.invoke('delete-user', {
-        body: { userId: id }
-      });
+  try {
+    // Ambil session user saat ini
+    const { data: { session } } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
 
-      if (error) throw error;
+    if (!accessToken) {
+      throw new Error("Tidak dapat mengambil access token. Silakan login ulang.");
+    }
 
+    // Panggil Edge Function delete-user yang baru
+    const { data, error } = await supabase.functions.invoke('delete-user', {
+      body: { userId: id },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      }
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (data.success) {
       toast({
         title: "Berhasil",
         description: "Pengguna berhasil dihapus",
       });
-
-      fetchUsers();
-    } catch (error: any) {
-      console.error('Error deleting user:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Gagal menghapus pengguna",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+      fetchUsers(); // Muat ulang daftar pengguna setelah penghapusan
+    } else {
+      throw new Error(data.error);
     }
-  };
+  } catch (error: any) {
+    toast({
+      title: "Error",
+      description: error.message || "Gagal menghapus pengguna",
+      variant: "destructive",
+    });
+  }
+};
 
   const getUserStats = () => {
     const total = users.length;
