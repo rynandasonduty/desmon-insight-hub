@@ -383,21 +383,74 @@ const ApprovalDesk = () => {
 
       if (reportsData && reportsData.length > 0) {
         // Transform database data to match our component structure
-        const transformedReports: Report[] = reportsData.map(report => ({
-          id: report.id,
-          fileName: report.file_name,
-          submittedBy: report.profiles?.full_name || 'Unknown User',
-          sbu: report.profiles?.sbu_name || 'Unknown SBU',
-          submittedAt: new Date(report.created_at).toLocaleString('id-ID'),
-          status: report.approved_at ? 'approved' : 'pending',
-          indicatorType: report.indicator_type,
-          rawData: typeof report.raw_data === 'object' ? report.raw_data : {},
-          processedData: typeof report.processed_data === 'object' ? report.processed_data : {},
-          calculatedScore: report.calculated_score,
-          fileSize: "N/A",
-          videoLinks: Array.isArray(report.video_links) ? report.video_links.filter(link => typeof link === 'string') as string[] : [],
-          rejectionReason: report.rejection_reason || undefined
-        }));
+        const transformedReportsPromises = reportsData.map(async (report) => {
+          let fileSize = "N/A";
+          
+          // Get file size from Supabase Storage if file_path exists
+          if (report.file_path) {
+            try {
+              const { data: fileData, error: fileError } = await supabase.storage
+                .from('reports')
+                .list('', {
+                  search: report.file_path.split('/').pop() || ''
+                });
+
+              if (!fileError && fileData && fileData.length > 0) {
+                const file = fileData.find(f => report.file_path?.includes(f.name));
+                if (file && file.metadata?.size) {
+                  // Convert bytes to human readable format
+                  const bytes = file.metadata.size;
+                  if (bytes === 0) {
+                    fileSize = '0 Bytes';
+                  } else {
+                    const k = 1024;
+                    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    fileSize = parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                  }
+                }
+              } else {
+                // Alternative method: try to get file info directly
+                const { data: fileInfo, error: infoError } = await supabase.storage
+                  .from('reports')
+                  .info(report.file_path);
+                
+                if (!infoError && fileInfo?.metadata?.size) {
+                  const bytes = fileInfo.metadata.size;
+                  if (bytes === 0) {
+                    fileSize = '0 Bytes';
+                  } else {
+                    const k = 1024;
+                    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    fileSize = parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                  }
+                }
+              }
+            } catch (storageError) {
+              console.warn('Could not get file size for:', report.file_path, storageError);
+              // Keep fileSize as "N/A" if we can't get the size
+            }
+          }
+
+          return {
+            id: report.id,
+            fileName: report.file_name,
+            submittedBy: report.profiles?.full_name || 'Unknown User',
+            sbu: report.profiles?.sbu_name || 'Unknown SBU',
+            submittedAt: new Date(report.created_at).toLocaleString('id-ID'),
+            status: report.approved_at ? 'approved' : 'pending',
+            indicatorType: report.indicator_type,
+            rawData: typeof report.raw_data === 'object' ? report.raw_data : {},
+            processedData: typeof report.processed_data === 'object' ? report.processed_data : {},
+            calculatedScore: report.calculated_score,
+            fileSize: fileSize,
+            videoLinks: Array.isArray(report.video_links) ? report.video_links.filter(link => typeof link === 'string') as string[] : [],
+            rejectionReason: report.rejection_reason || undefined
+          };
+        });
+        
+        const transformedReports = await Promise.all(transformedReportsPromises);
         
         // Use only real data from database
         setReports(transformedReports);

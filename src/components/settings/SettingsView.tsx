@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,40 +11,109 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Settings, Bell, Database, FileText, Mail, Shield, Save, Download, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSystemSettings, useEmailSettings, useReportSettings, useSettings } from "@/hooks/useSettings";
+import { supabase } from "@/integrations/supabase/client";
 
 const SettingsView = () => {
   const { toast } = useToast();
-  
-  const [systemSettings, setSystemSettings] = useState({
-    enableNotifications: true,
-    autoApproval: false,
-    maxFileSize: '50',
-    allowedFileTypes: ['xlsx', 'xls'],
-    backupFrequency: 'daily',
-    retentionPeriod: '365'
+  const [userId, setUserId] = useState<string | null>(null);
+  const [notificationSettings, setNotificationSettings] = useState({
+    upload: true,
+    approval: true,
+    rejection: true,
+    deadline: true,
+    system: true
   });
 
-  const [emailSettings, setEmailSettings] = useState({
-    smtpHost: '',
-    smtpPort: '587',
-    smtpUser: '',
-    smtpPassword: '',
-    enableEmailNotifications: true,
-    emailTemplate: 'default'
-  });
+  // Get current user ID
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
 
-  const [reportSettings, setReportSettings] = useState({
-    defaultExportFormat: 'xlsx',
-    includeCharts: true,
-    autoGenerateReports: false,
-    reportSchedule: 'weekly'
-  });
+    getCurrentUser();
+  }, []);
 
-  const handleSaveSettings = (section: string) => {
-    toast({
-      title: "Berhasil",
-      description: `Pengaturan ${section} berhasil disimpan`,
-    });
+  // Use settings hooks
+  const { systemSettings, updateSystemSettings, loading: systemLoading, saving: systemSaving } = useSystemSettings(userId || undefined);
+  const { emailSettings, updateEmailSettings, loading: emailLoading, saving: emailSaving } = useEmailSettings(userId || undefined);
+  const { reportSettings, updateReportSettings, loading: reportLoading, saving: reportSaving } = useReportSettings(userId || undefined);
+  const { settings, saveSettings, exportSettings, importSettings, saving: generalSaving } = useSettings(userId || undefined);
+
+  // Update notification settings from main settings
+  useEffect(() => {
+    if (settings.notificationTypes) {
+      setNotificationSettings(settings.notificationTypes);
+    }
+  }, [settings]);
+
+  const handleSaveSystemSettings = async () => {
+    const result = await updateSystemSettings(systemSettings);
+    
+    if (result.success) {
+      toast({
+        title: "Berhasil",
+        description: "Pengaturan sistem berhasil disimpan",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: result.error || "Gagal menyimpan pengaturan sistem",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSaveEmailSettings = async () => {
+    const result = await updateEmailSettings(emailSettings);
+    
+    if (result.success) {
+      toast({
+        title: "Berhasil",
+        description: "Pengaturan email berhasil disimpan",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: result.error || "Gagal menyimpan pengaturan email",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSaveReportSettings = async () => {
+    const result = await updateReportSettings(reportSettings);
+    
+    if (result.success) {
+      toast({
+        title: "Berhasil",
+        description: "Pengaturan laporan berhasil disimpan",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: result.error || "Gagal menyimpan pengaturan laporan",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSaveNotificationSettings = async () => {
+    const result = await saveSettings({ notificationTypes: notificationSettings });
+    
+    if (result.success) {
+      toast({
+        title: "Berhasil",
+        description: "Pengaturan notifikasi berhasil disimpan",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: result.error || "Gagal menyimpan pengaturan notifikasi",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleBackupNow = () => {
@@ -54,11 +123,35 @@ const SettingsView = () => {
     });
   };
 
-  const handleImportConfig = () => {
+  const handleExportConfig = () => {
+    exportSettings();
     toast({
-      title: "Import Berhasil",
-      description: "Konfigurasi berhasil diimport",
+      title: "Export Berhasil",
+      description: "Konfigurasi berhasil diekspor ke file JSON",
     });
+  };
+
+  const handleImportConfig = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const result = await importSettings(file);
+    
+    if (result.success) {
+      toast({
+        title: "Import Berhasil",
+        description: "Konfigurasi berhasil diimport",
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: result.error || "Gagal mengimport konfigurasi",
+        variant: "destructive"
+      });
+    }
+
+    // Reset file input
+    event.target.value = '';
   };
 
   return (
@@ -94,93 +187,103 @@ const SettingsView = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="maxFileSize">Ukuran File Maksimal (MB)</Label>
-                  <Input
-                    id="maxFileSize"
-                    type="number"
-                    value={systemSettings.maxFileSize}
-                    onChange={(e) => setSystemSettings({...systemSettings, maxFileSize: e.target.value})}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Batas ukuran file yang dapat diunggah
-                  </p>
+              {systemLoading ? (
+                <div className="space-y-4">
+                  <div className="h-10 bg-muted animate-pulse rounded" />
+                  <div className="h-10 bg-muted animate-pulse rounded" />
+                  <div className="h-6 bg-muted animate-pulse rounded" />
                 </div>
+              ) : (
+                <>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="maxFileSize">Ukuran File Maksimal (MB)</Label>
+                      <Input
+                        id="maxFileSize"
+                        type="number"
+                        value={systemSettings.maxFileSize}
+                        onChange={(e) => updateSystemSettings({ maxFileSize: e.target.value })}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Batas ukuran file yang dapat diunggah
+                      </p>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="retentionPeriod">Periode Retensi Data (hari)</Label>
-                  <Input
-                    id="retentionPeriod"
-                    type="number"
-                    value={systemSettings.retentionPeriod}
-                    onChange={(e) => setSystemSettings({...systemSettings, retentionPeriod: e.target.value})}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Berapa lama data disimpan dalam sistem
-                  </p>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Auto Approval</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Setujui laporan secara otomatis jika lolos validasi sistem
-                    </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="retentionPeriod">Periode Retensi Data (hari)</Label>
+                      <Input
+                        id="retentionPeriod"
+                        type="number"
+                        value={systemSettings.retentionPeriod}
+                        onChange={(e) => updateSystemSettings({ retentionPeriod: e.target.value })}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Berapa lama data disimpan dalam sistem
+                      </p>
+                    </div>
                   </div>
-                  <Switch
-                    checked={systemSettings.autoApproval}
-                    onCheckedChange={(checked) => setSystemSettings({...systemSettings, autoApproval: checked})}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Notifikasi Real-time</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Aktifkan notifikasi push untuk update real-time
-                    </p>
+                  <Separator />
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Auto Approval</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Setujui laporan secara otomatis jika lolos validasi sistem
+                        </p>
+                      </div>
+                      <Switch
+                        checked={systemSettings.autoApproval}
+                        onCheckedChange={(checked) => updateSystemSettings({ autoApproval: checked })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Notifikasi Real-time</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Aktifkan notifikasi push untuk update real-time
+                        </p>
+                      </div>
+                      <Switch
+                        checked={systemSettings.enableNotifications}
+                        onCheckedChange={(checked) => updateSystemSettings({ enableNotifications: checked })}
+                      />
+                    </div>
                   </div>
-                  <Switch
-                    checked={systemSettings.enableNotifications}
-                    onCheckedChange={(checked) => setSystemSettings({...systemSettings, enableNotifications: checked})}
-                  />
-                </div>
-              </div>
 
-              <Separator />
+                  <Separator />
 
-              <div className="space-y-2">
-                <Label>Tipe File yang Diizinkan</Label>
-                <div className="flex flex-wrap gap-2">
-                  {['xlsx', 'xls', 'csv'].map((type) => (
-                    <Badge 
-                      key={type} 
-                      variant={systemSettings.allowedFileTypes.includes(type) ? "default" : "secondary"}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        const updatedTypes = systemSettings.allowedFileTypes.includes(type)
-                          ? systemSettings.allowedFileTypes.filter(t => t !== type)
-                          : [...systemSettings.allowedFileTypes, type];
-                        setSystemSettings({...systemSettings, allowedFileTypes: updatedTypes});
-                      }}
-                    >
-                      .{type}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+                  <div className="space-y-2">
+                    <Label>Tipe File yang Diizinkan</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {['xlsx', 'xls', 'csv'].map((type) => (
+                        <Badge 
+                          key={type} 
+                          variant={systemSettings.allowedFileTypes.includes(type) ? "default" : "secondary"}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            const updatedTypes = systemSettings.allowedFileTypes.includes(type)
+                              ? systemSettings.allowedFileTypes.filter(t => t !== type)
+                              : [...systemSettings.allowedFileTypes, type];
+                            updateSystemSettings({ allowedFileTypes: updatedTypes });
+                          }}
+                        >
+                          .{type}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
 
-              <div className="flex justify-end">
-                <Button onClick={() => handleSaveSettings('sistem')}>
-                  <Save className="mr-2 h-4 w-4" />
-                  Simpan Pengaturan
-                </Button>
-              </div>
+                  <div className="flex justify-end">
+                    <Button onClick={handleSaveSystemSettings} disabled={systemSaving}>
+                      <Save className="mr-2 h-4 w-4" />
+                      {systemSaving ? 'Menyimpan...' : 'Simpan Pengaturan'}
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -211,15 +314,20 @@ const SettingsView = () => {
                       <Label>{item.label}</Label>
                       <p className="text-sm text-muted-foreground">{item.description}</p>
                     </div>
-                    <Switch defaultChecked={true} />
+                    <Switch 
+                      checked={notificationSettings[item.key as keyof typeof notificationSettings]} 
+                      onCheckedChange={(checked) => 
+                        setNotificationSettings(prev => ({ ...prev, [item.key]: checked }))
+                      }
+                    />
                   </div>
                 ))}
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={() => handleSaveSettings('notifikasi')}>
+                <Button onClick={handleSaveNotificationSettings} disabled={generalSaving}>
                   <Save className="mr-2 h-4 w-4" />
-                  Simpan Pengaturan
+                  {generalSaving ? 'Menyimpan...' : 'Simpan Pengaturan'}
                 </Button>
               </div>
             </CardContent>
@@ -239,84 +347,97 @@ const SettingsView = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="smtpHost">SMTP Host</Label>
-                  <Input
-                    id="smtpHost"
-                    placeholder="smtp.gmail.com"
-                    value={emailSettings.smtpHost}
-                    onChange={(e) => setEmailSettings({...emailSettings, smtpHost: e.target.value})}
-                  />
+              {emailLoading ? (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                  </div>
                 </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="smtpHost">SMTP Host</Label>
+                      <Input
+                        id="smtpHost"
+                        placeholder="smtp.gmail.com"
+                        value={emailSettings.smtpHost}
+                        onChange={(e) => updateEmailSettings({ smtpHost: e.target.value })}
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="smtpPort">SMTP Port</Label>
-                  <Input
-                    id="smtpPort"
-                    placeholder="587"
-                    value={emailSettings.smtpPort}
-                    onChange={(e) => setEmailSettings({...emailSettings, smtpPort: e.target.value})}
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="smtpPort">SMTP Port</Label>
+                      <Input
+                        id="smtpPort"
+                        placeholder="587"
+                        value={emailSettings.smtpPort}
+                        onChange={(e) => updateEmailSettings({ smtpPort: e.target.value })}
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="smtpUser">SMTP Username</Label>
-                  <Input
-                    id="smtpUser"
-                    placeholder="your-email@example.com"
-                    value={emailSettings.smtpUser}
-                    onChange={(e) => setEmailSettings({...emailSettings, smtpUser: e.target.value})}
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="smtpUser">SMTP Username</Label>
+                      <Input
+                        id="smtpUser"
+                        placeholder="your-email@example.com"
+                        value={emailSettings.smtpUser}
+                        onChange={(e) => updateEmailSettings({ smtpUser: e.target.value })}
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="smtpPassword">SMTP Password</Label>
-                  <Input
-                    id="smtpPassword"
-                    type="password"
-                    placeholder="••••••••"
-                    value={emailSettings.smtpPassword}
-                    onChange={(e) => setEmailSettings({...emailSettings, smtpPassword: e.target.value})}
-                  />
-                </div>
-              </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="smtpPassword">SMTP Password</Label>
+                      <Input
+                        id="smtpPassword"
+                        type="password"
+                        placeholder="••••••••"
+                        value={emailSettings.smtpPassword}
+                        onChange={(e) => updateEmailSettings({ smtpPassword: e.target.value })}
+                      />
+                    </div>
+                  </div>
 
-              <Separator />
+                  <Separator />
 
-              <div className="space-y-2">
-                <Label htmlFor="emailTemplate">Template Email</Label>
-                <Select value={emailSettings.emailTemplate} onValueChange={(value) => setEmailSettings({...emailSettings, emailTemplate: value})}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Template Default</SelectItem>
-                    <SelectItem value="corporate">Template Corporate</SelectItem>
-                    <SelectItem value="minimal">Template Minimal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="emailTemplate">Template Email</Label>
+                    <Select value={emailSettings.emailTemplate} onValueChange={(value) => updateEmailSettings({ emailTemplate: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Template Default</SelectItem>
+                        <SelectItem value="corporate">Template Corporate</SelectItem>
+                        <SelectItem value="minimal">Template Minimal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Aktifkan Email Notifikasi</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Kirim notifikasi via email untuk event penting
-                  </p>
-                </div>
-                <Switch
-                  checked={emailSettings.enableEmailNotifications}
-                  onCheckedChange={(checked) => setEmailSettings({...emailSettings, enableEmailNotifications: checked})}
-                />
-              </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Aktifkan Email Notifikasi</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Kirim notifikasi via email untuk event penting
+                      </p>
+                    </div>
+                    <Switch
+                      checked={emailSettings.enableEmailNotifications}
+                      onCheckedChange={(checked) => updateEmailSettings({ enableEmailNotifications: checked })}
+                    />
+                  </div>
 
-              <div className="flex justify-end">
-                <Button onClick={() => handleSaveSettings('email')}>
-                  <Save className="mr-2 h-4 w-4" />
-                  Simpan Pengaturan
-                </Button>
-              </div>
+                  <div className="flex justify-end">
+                    <Button onClick={handleSaveEmailSettings} disabled={emailSaving}>
+                      <Save className="mr-2 h-4 w-4" />
+                      {emailSaving ? 'Menyimpan...' : 'Simpan Pengaturan'}
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -334,73 +455,86 @@ const SettingsView = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="defaultExportFormat">Format Export Default</Label>
-                  <Select value={reportSettings.defaultExportFormat} onValueChange={(value) => setReportSettings({...reportSettings, defaultExportFormat: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
-                      <SelectItem value="pdf">PDF</SelectItem>
-                      <SelectItem value="csv">CSV</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="reportSchedule">Jadwal Laporan Otomatis</Label>
-                  <Select value={reportSettings.reportSchedule} onValueChange={(value) => setReportSettings({...reportSettings, reportSchedule: value})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Harian</SelectItem>
-                      <SelectItem value="weekly">Mingguan</SelectItem>
-                      <SelectItem value="monthly">Bulanan</SelectItem>
-                      <SelectItem value="quarterly">Triwulanan</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Sertakan Grafik</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Tambahkan visualisasi data dalam export laporan
-                    </p>
+              {reportLoading ? (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                    <div className="h-10 bg-muted animate-pulse rounded" />
                   </div>
-                  <Switch
-                    checked={reportSettings.includeCharts}
-                    onCheckedChange={(checked) => setReportSettings({...reportSettings, includeCharts: checked})}
-                  />
+                  <div className="h-6 bg-muted animate-pulse rounded" />
+                  <div className="h-6 bg-muted animate-pulse rounded" />
                 </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="defaultExportFormat">Format Export Default</Label>
+                      <Select value={reportSettings.defaultExportFormat} onValueChange={(value) => updateReportSettings({ defaultExportFormat: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
+                          <SelectItem value="pdf">PDF</SelectItem>
+                          <SelectItem value="csv">CSV</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Generate Laporan Otomatis</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Buat laporan secara otomatis sesuai jadwal
-                    </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="reportSchedule">Jadwal Laporan Otomatis</Label>
+                      <Select value={reportSettings.reportSchedule} onValueChange={(value) => updateReportSettings({ reportSchedule: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Harian</SelectItem>
+                          <SelectItem value="weekly">Mingguan</SelectItem>
+                          <SelectItem value="monthly">Bulanan</SelectItem>
+                          <SelectItem value="quarterly">Triwulanan</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <Switch
-                    checked={reportSettings.autoGenerateReports}
-                    onCheckedChange={(checked) => setReportSettings({...reportSettings, autoGenerateReports: checked})}
-                  />
-                </div>
-              </div>
 
-              <div className="flex justify-end">
-                <Button onClick={() => handleSaveSettings('laporan')}>
-                  <Save className="mr-2 h-4 w-4" />
-                  Simpan Pengaturan
-                </Button>
-              </div>
+                  <Separator />
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Sertakan Grafik</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Tambahkan visualisasi data dalam export laporan
+                        </p>
+                      </div>
+                      <Switch
+                        checked={reportSettings.includeCharts}
+                        onCheckedChange={(checked) => updateReportSettings({ includeCharts: checked })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Generate Laporan Otomatis</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Buat laporan secara otomatis sesuai jadwal
+                        </p>
+                      </div>
+                      <Switch
+                        checked={reportSettings.autoGenerateReports}
+                        onCheckedChange={(checked) => updateReportSettings({ autoGenerateReports: checked })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button onClick={handleSaveReportSettings} disabled={reportSaving}>
+                      <Save className="mr-2 h-4 w-4" />
+                      {reportSaving ? 'Menyimpan...' : 'Simpan Pengaturan'}
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -420,7 +554,7 @@ const SettingsView = () => {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="backupFrequency">Frekuensi Backup</Label>
-                <Select value={systemSettings.backupFrequency} onValueChange={(value) => setSystemSettings({...systemSettings, backupFrequency: value})}>
+                <Select value={systemSettings.backupFrequency} onValueChange={(value) => updateSystemSettings({ backupFrequency: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -449,16 +583,27 @@ const SettingsView = () => {
                 <Separator />
 
                 <div>
-                  <h3 className="text-lg font-medium mb-2">Import Konfigurasi</h3>
+                  <h3 className="text-lg font-medium mb-2">Export/Import Konfigurasi</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Restore pengaturan dari file backup sebelumnya
+                    Export atau import pengaturan aplikasi
                   </p>
                   <div className="flex gap-2">
-                    <Input type="file" accept=".json" className="flex-1" />
-                    <Button onClick={handleImportConfig}>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Import
+                    <Button variant="outline" onClick={handleExportConfig}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Export Config
                     </Button>
+                    <div className="relative">
+                      <Input
+                        type="file"
+                        accept=".json"
+                        onChange={handleImportConfig}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <Button variant="outline">
+                        <Upload className="mr-2 h-4 w-4" />
+                        Import Config
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -473,9 +618,9 @@ const SettingsView = () => {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={() => handleSaveSettings('backup')}>
+                <Button onClick={handleSaveSystemSettings} disabled={systemSaving}>
                   <Save className="mr-2 h-4 w-4" />
-                  Simpan Pengaturan
+                  {systemSaving ? 'Menyimpan...' : 'Simpan Pengaturan'}
                 </Button>
               </div>
             </CardContent>
