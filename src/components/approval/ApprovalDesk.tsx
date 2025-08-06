@@ -46,83 +46,83 @@ interface Report {
 }
 
 // Mock data for detailed reports
-const mockDetailedReports = [
-  {
-    id: "RPT-001",
-    fileName: "Laporan Media Sosial Q4 2024.xlsx",
-    submittedBy: "Ahmad Sutanto",
-    sbu: "SBU Jawa Barat", 
-    submittedAt: "2024-01-15 14:30",
-    status: "pending",
-    indicatorType: "Media Sosial",
-    rawData: {
-      followers: 15420,
-      engagement_rate: 3.2,
-      posts_count: 45,
-      reach: 125000,
-      impressions: 245000
-    },
-    processedData: {
-      score_engagement: 85,
-      score_reach: 78,
-      score_growth: 92
-    },
-    calculatedScore: null,
-    fileSize: "2.3 MB",
-    videoLinks: [
-      "https://youtube.com/watch?v=example1",
-      "https://instagram.com/reel/example2"
-    ]
-  },
-  {
-    id: "RPT-002",
-    fileName: "Digital Marketing Report Jan 2024.xlsx", 
-    submittedBy: "Siti Rahayu",
-    sbu: "SBU Jawa Tengah",
-    submittedAt: "2024-01-14 16:45",
-    status: "pending",
-    indicatorType: "Digital Marketing",
-    rawData: {
-      website_visits: 8450,
-      conversion_rate: 2.8,
-      bounce_rate: 45,
-      session_duration: 185
-    },
-    processedData: {
-      score_traffic: 75,
-      score_conversion: 82,
-      score_retention: 68
-    },
-    calculatedScore: null,
-    fileSize: "1.8 MB",
-    videoLinks: []
-  },
-  {
-    id: "RPT-003",
-    fileName: "Website Analytics Dec 2023.xlsx",
-    submittedBy: "Budi Prasetyo", 
-    sbu: "SBU Jawa Barat",
-    submittedAt: "2024-01-13 11:20",
-    status: "pending",
-    indicatorType: "Website",
-    rawData: {
-      page_views: 25600,
-      unique_visitors: 12300,
-      avg_session: 220,
-      conversion_rate: 3.5
-    },
-    processedData: {
-      score_traffic: 88,
-      score_engagement: 76,
-      score_conversion: 91
-    },
-    calculatedScore: null,
-    fileSize: "3.1 MB",
-    videoLinks: [
-      "https://youtube.com/watch?v=demo1"
-    ]
-  }
-];
+// const mockDetailedReports = [
+//   {
+//     id: "RPT-001",
+//     fileName: "Laporan Media Sosial Q4 2024.xlsx",
+//     submittedBy: "Ahmad Sutanto",
+//     sbu: "SBU Jawa Barat", 
+//     submittedAt: "2024-01-15 14:30",
+//     status: "pending",
+//     indicatorType: "Media Sosial",
+//     rawData: {
+//       followers: 15420,
+//       engagement_rate: 3.2,
+//       posts_count: 45,
+//       reach: 125000,
+//       impressions: 245000
+//     },
+//     processedData: {
+//       score_engagement: 85,
+//       score_reach: 78,
+//       score_growth: 92
+//     },
+//     calculatedScore: null,
+//     fileSize: "2.3 MB",
+//     videoLinks: [
+//       "https://youtube.com/watch?v=example1",
+//       "https://instagram.com/reel/example2"
+//     ]
+//   },
+//   {
+//     id: "RPT-002",
+//     fileName: "Digital Marketing Report Jan 2024.xlsx", 
+//     submittedBy: "Siti Rahayu",
+//     sbu: "SBU Jawa Tengah",
+//     submittedAt: "2024-01-14 16:45",
+//     status: "pending",
+//     indicatorType: "Digital Marketing",
+//     rawData: {
+//       website_visits: 8450,
+//       conversion_rate: 2.8,
+//       bounce_rate: 45,
+//       session_duration: 185
+//     },
+//     processedData: {
+//       score_traffic: 75,
+//       score_conversion: 82,
+//       score_retention: 68
+//     },
+//     calculatedScore: null,
+//     fileSize: "1.8 MB",
+//     videoLinks: []
+//   },
+//   {
+//     id: "RPT-003",
+//     fileName: "Website Analytics Dec 2023.xlsx",
+//     submittedBy: "Budi Prasetyo", 
+//     sbu: "SBU Jawa Barat",
+//     submittedAt: "2024-01-13 11:20",
+//     status: "pending",
+//     indicatorType: "Website",
+//     rawData: {
+//       page_views: 25600,
+//       unique_visitors: 12300,
+//       avg_session: 220,
+//       conversion_rate: 3.5
+//     },
+//     processedData: {
+//       score_traffic: 88,
+//       score_engagement: 76,
+//       score_conversion: 91
+//     },
+//     calculatedScore: null,
+//     fileSize: "3.1 MB",
+//     videoLinks: [
+//       "https://youtube.com/watch?v=demo1"
+//     ]
+//   }
+// ];
 
 interface ReportDetailProps {
   report: Report;
@@ -355,7 +355,7 @@ const ApprovalDesk = () => {
   const [sbuFilter, setSbuFilter] = useState("all");
   const [indicatorFilter, setIndicatorFilter] = useState("all");
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
-  const [reports, setReports] = useState<Report[]>(mockDetailedReports);
+  const [reports, setReports] = useState<Report[]>([]); // Awal kosong, tidak pakai mock
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real reports from database
@@ -455,8 +455,7 @@ const ApprovalDesk = () => {
         // Use only real data from database
         setReports(transformedReports);
       } else {
-        // Show mock data if no real data
-        setReports(mockDetailedReports);
+        setReports([]); // Tidak ada fallback ke mockDetailedReports
       }
     } catch (error) {
       console.error('Error in fetchReports:', error);
