@@ -208,7 +208,7 @@ const DashboardView = ({ userRole }: { userRole: 'admin' | 'sbu' }) => {
                   onClick={() => handleQuickAction('approval')}
                 >
                   <Check className="mr-2 h-4 w-4" />
-                  Review Laporan Pending
+                  Review Laporan Menunggu Approval
                 </Button>
                 <Button 
                   variant="outline" 
