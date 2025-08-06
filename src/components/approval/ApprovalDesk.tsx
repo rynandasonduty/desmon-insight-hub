@@ -355,7 +355,7 @@ const ApprovalDesk = () => {
   const [sbuFilter, setSbuFilter] = useState("all");
   const [indicatorFilter, setIndicatorFilter] = useState("all");
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
-  const [reports, setReports] = useState<Report[]>(mockDetailedReports);
+  const [reports, setReports] = useState<Report[]>([]); // Awalnya kosong, tidak pakai mock
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real reports from database
@@ -455,8 +455,7 @@ const ApprovalDesk = () => {
         // Use only real data from database
         setReports(transformedReports);
       } else {
-        // Show mock data if no real data
-        setReports(mockDetailedReports);
+        setReports([]); // Tidak ada data, kosongkan
       }
     } catch (error) {
       console.error('Error in fetchReports:', error);
