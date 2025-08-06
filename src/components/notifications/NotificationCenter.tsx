@@ -23,7 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface Notification {
   id: string;
-  type: 'report_approved' | 'report_rejected' | 'report_submitted' | 'kpi_updated' | 'system' | 'user_activity' | 'report_processing' | 'report_completed' | 'report_error';
+  type: 'report_approved' | 'report_rejected' | 'report_submitted' | 'kpi_updated' | 'system' | 'user_activity' | 'report_processing' | 'report_completed' | 'report_error' | 'report_pending_approval';
   title: string;
   message: string;
   created_at: string;
@@ -153,6 +153,7 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
       case 'report_rejected':
         return <XCircle className="h-4 w-4 text-red-600" />;
       case 'report_submitted':
+      case 'report_pending_approval':
         return <FileText className="h-4 w-4 text-blue-600" />;
       case 'report_processing':
         return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />;
@@ -180,6 +181,7 @@ const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
       case 'report_processing':
       case 'report_completed':
       case 'report_submitted':
+      case 'report_pending_approval':
         return 'medium';
       default:
         return 'low';

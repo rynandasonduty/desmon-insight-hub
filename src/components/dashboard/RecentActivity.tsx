@@ -19,8 +19,8 @@ const RecentActivity = () => {
     {
       id: '1',
       type: 'upload',
-      title: 'Laporan Media Sosial Oktober',
-      description: 'SBU Jawa Barat mengunggah laporan',
+      title: 'Laporan Skoring Media Massa',
+      description: 'SBU Jawa Barat mengunggah laporan publikasi media',
       user: 'Jawa Barat',
       timestamp: '2 menit yang lalu',
       status: 'processing'
@@ -28,8 +28,8 @@ const RecentActivity = () => {
     {
       id: '2',
       type: 'approve',
-      title: 'Laporan TJSL Program A',
-      description: 'Admin menyetujui laporan',
+      title: 'Laporan Skoring Media Massa',
+      description: 'Admin menyetujui laporan dan memicu kalkulasi skor',
       user: 'Admin Central',
       timestamp: '15 menit yang lalu',
       status: 'success'
@@ -37,8 +37,8 @@ const RecentActivity = () => {
     {
       id: '3',
       type: 'reject',
-      title: 'Laporan Komunikasi Internal',
-      description: 'Ditolak: Video tidak dapat diakses',
+      title: 'Laporan Skoring Media Massa',
+      description: 'Ditolak: Link video duplikat terdeteksi',
       user: 'Sumatera Utara',
       timestamp: '1 jam yang lalu',
       status: 'error'
@@ -46,8 +46,8 @@ const RecentActivity = () => {
     {
       id: '4',
       type: 'upload',
-      title: 'Laporan Kampanye Q4',
-      description: 'SBU Kalimantan mengunggah laporan',
+      title: 'Laporan Skoring Media Massa',
+      description: 'SBU Kalimantan mengunggah laporan publikasi media',
       user: 'Kalimantan',
       timestamp: '2 jam yang lalu',
       status: 'success'
@@ -55,8 +55,8 @@ const RecentActivity = () => {
     {
       id: '5',
       type: 'process',
-      title: 'Validasi Data Selesai',
-      description: 'ETL pipeline memproses 12 laporan',
+      title: 'Kalkulasi Skor Selesai',
+      description: 'ETL Stage 2 menghitung skor 8 laporan yang disetujui',
       user: 'System',
       timestamp: '3 jam yang lalu',
       status: 'success'

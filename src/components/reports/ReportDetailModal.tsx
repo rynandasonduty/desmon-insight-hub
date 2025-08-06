@@ -48,13 +48,20 @@ const ReportDetailModal = ({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'approved':
-        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3" />Disetujui</Badge>;
+        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3" />Disetujui Admin</Badge>;
+      case 'completed':
+        return <Badge className="bg-blue-100 text-blue-800"><CheckCircle className="mr-1 h-3 w-3" />Selesai</Badge>;
       case 'rejected':
-        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Ditolak</Badge>;
+        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Ditolak Admin</Badge>;
+      case 'system_rejected':
+        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Ditolak Sistem</Badge>;
       case 'pending':
+      case 'pending_approval':
         return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Menunggu Review</Badge>;
       case 'processing':
         return <Badge className="bg-blue-100 text-blue-800"><BarChart3 className="mr-1 h-3 w-3" />Sedang Diproses</Badge>;
+      case 'failed':
+        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Gagal</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -65,7 +72,7 @@ const ReportDetailModal = ({
       onApprove(report.id, approvalNotes);
       toast({
         title: "Laporan Disetujui",
-        description: `Laporan ${report.fileName} telah disetujui.`,
+        description: `Laporan ${report.fileName} telah disetujui dan akan dilanjutkan ke proses kalkulasi skor.`,
       });
       onClose();
     }

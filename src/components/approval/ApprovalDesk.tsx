@@ -368,7 +368,7 @@ const ApprovalDesk = () => {
           *,
           profiles!reports_user_id_fkey(full_name, sbu_name)
         `)
-        .eq('status', 'completed')
+        .eq('status', 'pending_approval')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -444,18 +444,30 @@ const ApprovalDesk = () => {
 
   const handleApprove = async (reportId: string, note?: string) => {
     try {
-      // Update in database
-      const { error } = await supabase
-        .from('reports')
-        .update({
-          status: 'approved',
-          approved_at: new Date().toISOString(),
-          approved_by: (await supabase.auth.getUser()).data.user?.id
-        })
-        .eq('id', reportId);
+      // Get current session for authorization
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error("Session tidak valid");
+      }
+
+      // Call admin action edge function
+      const { data, error } = await supabase.functions.invoke('admin-report-action', {
+        body: JSON.stringify({ 
+          reportId: reportId,
+          action: 'approve',
+          notes: note
+        }),
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        }
+      });
 
       if (error) {
-        throw error;
+        throw new Error(error.message || 'Gagal menyetujui laporan');
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Gagal menyetujui laporan');
       }
 
       // Update local state
@@ -467,7 +479,7 @@ const ApprovalDesk = () => {
       
       toast({
         title: "Laporan Disetujui",
-        description: "Laporan berhasil disetujui dan disimpan ke database",
+        description: "Laporan berhasil disetujui dan akan dilanjutkan ke proses kalkulasi skor",
       });
 
       // Refresh data
@@ -484,17 +496,30 @@ const ApprovalDesk = () => {
 
   const handleReject = async (reportId: string, reason: string) => {
     try {
-      // Update in database
-      const { error } = await supabase
-        .from('reports')
-        .update({
-          status: 'rejected',
-          rejection_reason: reason
-        })
-        .eq('id', reportId);
+      // Get current session for authorization
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error("Session tidak valid");
+      }
+
+      // Call admin action edge function
+      const { data, error } = await supabase.functions.invoke('admin-report-action', {
+        body: JSON.stringify({ 
+          reportId: reportId,
+          action: 'reject',
+          reason: reason
+        }),
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        }
+      });
 
       if (error) {
-        throw error;
+        throw new Error(error.message || 'Gagal menolak laporan');
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Gagal menolak laporan');
       }
 
       // Update local state
@@ -506,7 +531,7 @@ const ApprovalDesk = () => {
       
       toast({
         title: "Laporan Ditolak", 
-        description: "Laporan telah ditolak dan disimpan ke database",
+        description: "Laporan telah ditolak dan tidak akan dilanjutkan ke proses kalkulasi",
         variant: "destructive",
       });
 

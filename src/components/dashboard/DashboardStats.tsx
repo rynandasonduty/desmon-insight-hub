@@ -50,21 +50,21 @@ const DashboardStats = ({ userRole }: DashboardStatsProps) => {
     {
       title: "Menunggu Approval",
       value: "23",
-      description: "Perlu ditinjau",
+      description: "Menunggu persetujuan admin",
       icon: <Clock className="h-4 w-4" />,
       trend: { value: 8, isPositive: false }
     },
     {
-      title: "Disetujui",
+      title: "Selesai Diproses",
       value: "1,156",
-      description: "Laporan valid",
+      description: "Laporan dengan skor final",
       icon: <CheckCircle className="h-4 w-4" />,
       trend: { value: 15, isPositive: true }
     },
     {
       title: "Ditolak",
       value: "68",
-      description: "Perlu perbaikan",
+      description: "Ditolak admin/sistem",
       icon: <XCircle className="h-4 w-4" />,
       trend: { value: 5, isPositive: false }
     },

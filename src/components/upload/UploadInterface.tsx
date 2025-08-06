@@ -20,34 +20,9 @@ const UploadInterface = () => {
 
   const indicators = [
     {
-      id: 'siaran-pers',
-      name: 'Produksi Siaran Pers',
-      description: 'Laporan kegiatan produksi siaran pers dan komunikasi eksternal'
-    },
-    {
-      id: 'media-sosial',
-      name: 'Produksi Konten Media Sosial',
-      description: 'Laporan konten media sosial dan engagement'
-    },
-    {
-      id: 'publikasi-media',
+      id: 'skoring-publikasi-media',
       name: 'Skoring Publikasi Media Massa',
-      description: 'Laporan dan skor publikasi di media massa'
-    },
-    {
-      id: 'publikasi-sosial',
-      name: 'Skoring Publikasi Media Sosial',
-      description: 'Laporan skor publikasi di platform media sosial'
-    },
-    {
-      id: 'kampanye-komunikasi',
-      name: 'Pengelolaan Kampanye Komunikasi',
-      description: 'Laporan kampanye komunikasi dan outreach'
-    },
-    {
-      id: 'ofi-afi',
-      name: 'Tindaklanjut OFI to AFI',
-      description: 'Laporan tindak lanjut Opportunity for Improvement'
+      description: 'Laporan dan skor publikasi di berbagai platform media massa (media sosial, online, radio, cetak, running text, TV)'
     }
   ];
 
@@ -180,7 +155,7 @@ const UploadInterface = () => {
 
       toast({
         title: "Laporan Berhasil Diunggah!",
-        description: "Laporan Anda telah masuk ke antrian dan akan diproses dalam beberapa menit. Anda akan menerima notifikasi ketika proses selesai.",
+        description: "Laporan Anda telah masuk ke antrian untuk validasi sistem. Setelah validasi, laporan akan menunggu persetujuan admin sebelum dihitung skornya.",
       });
 
       // Reset form

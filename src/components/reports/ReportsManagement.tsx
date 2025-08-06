@@ -114,14 +114,21 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'completed':
+        return <Badge className="bg-blue-100 text-blue-800"><CheckCircle className="mr-1 h-3 w-3" />Selesai</Badge>;
       case 'approved':
-        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3" />Disetujui</Badge>;
+        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3" />Disetujui Admin</Badge>;
       case 'rejected':
-        return <Badge className="bg-red-100 text-red-800"><XCircle className="mr-1 h-3 w-3" />Ditolak</Badge>;
+        return <Badge className="bg-red-100 text-red-800"><XCircle className="mr-1 h-3 w-3" />Ditolak Admin</Badge>;
+      case 'system_rejected':
+        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Ditolak Sistem</Badge>;
       case 'pending':
+      case 'pending_approval':
         return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="mr-1 h-3 w-3" />Pending</Badge>;
       case 'processing':
         return <Badge className="bg-blue-100 text-blue-800"><TrendingUp className="mr-1 h-3 w-3" />Diproses</Badge>;
+      case 'failed':
+        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Gagal</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -261,10 +268,14 @@ const ReportsManagement = ({ userRole, currentSBU = "SBU Jawa Barat" }: ReportsM
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Semua Status</SelectItem>
+                <SelectItem value="completed">Selesai</SelectItem>
                 <SelectItem value="approved">Disetujui</SelectItem>
+                <SelectItem value="pending_approval">Menunggu Approval</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="rejected">Ditolak</SelectItem>
+                <SelectItem value="system_rejected">Ditolak Sistem</SelectItem>
                 <SelectItem value="processing">Diproses</SelectItem>
+                <SelectItem value="failed">Gagal</SelectItem>
               </SelectContent>
             </Select>
 
