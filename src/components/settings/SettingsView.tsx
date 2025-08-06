@@ -13,6 +13,7 @@ import { Settings, Bell, Database, FileText, Mail, Shield, Save, Download, Uploa
 import { useToast } from "@/hooks/use-toast";
 import { useSystemSettings, useEmailSettings, useReportSettings, useSettings } from "@/hooks/useSettings";
 import { supabase } from "@/integrations/supabase/client";
+import SystemSetup from "./SystemSetup";
 
 const SettingsView = () => {
   const { toast } = useToast();
@@ -166,13 +167,19 @@ const SettingsView = () => {
 
       {/* Main Content */}
       <Tabs defaultValue="system" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="system">Sistem</TabsTrigger>
+          <TabsTrigger value="etl">Setup ETL</TabsTrigger>
           <TabsTrigger value="notifications">Notifikasi</TabsTrigger>
           <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="reports">Laporan</TabsTrigger>
           <TabsTrigger value="backup">Backup</TabsTrigger>
         </TabsList>
+
+        {/* ETL Setup */}
+        <TabsContent value="etl" className="space-y-4">
+          <SystemSetup />
+        </TabsContent>
 
         {/* System Settings */}
         <TabsContent value="system" className="space-y-4">
