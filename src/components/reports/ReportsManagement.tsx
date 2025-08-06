@@ -521,16 +521,18 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
       </Card>
 
       {/* Report Detail Modal */}
-      {selectedReport && (
-        <ReportDetailModal
-          isOpen={detailModalOpen}
-          onClose={handleCloseDetailModal}
-          report={selectedReport}
-          userRole={userRole}
-          onApprove={handleApproveReport}
-          onReject={handleRejectReport}
-        />
-      )}
+      <ReportDetailModal
+        report={selectedReport}
+        isOpen={detailModalOpen}
+        onClose={handleCloseDetailModal}
+        userRole={userRole}
+        onApprove={async (reportId: string) => {
+          await handleApproveReport(reportId);
+        }}
+        onReject={async (reportId: string, reason: string) => {
+          await handleRejectReport(reportId, reason);
+        }}
+      />
     </div>
   );
 };

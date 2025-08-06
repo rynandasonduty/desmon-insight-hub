@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 import { useKPIDefinitions } from "@/hooks/useKPIDefinitions";
+import ETLProcessor from "@/lib/etl-processor";
+import * as XLSX from 'xlsx';
 
 const UploadInterface = () => {
   const [selectedIndicator, setSelectedIndicator] = useState<string>("");
@@ -22,33 +24,21 @@ const UploadInterface = () => {
   // Fetch KPI definitions from Supabase
   const { kpiDefinitions, loading: kpiLoading, error: kpiError } = useKPIDefinitions();
 
-  // Create template data for different indicator types
+  // Create template data for different indicator types based on image 2 requirements
   const createExcelTemplate = (indicatorType: string, indicatorName: string) => {
-    // Basic template structure based on indicator type
+    // Template structure based on the actual report format from image 2
     const templates: { [key: string]: any } = {
-      'skoring-publikasi-media': [
-        ['No', 'Platform', 'Judul Konten', 'Link URL', 'Tanggal Publikasi', 'Jenis Media', 'Reach/Views', 'Engagement', 'Sentiment', 'Kategori'],
-        [1, 'Facebook', 'Contoh judul post', 'https://facebook.com/post/123', '2024-01-15', 'Media Sosial', 1500, 50, 'Positif', 'Informasi'],
-        [2, 'Instagram', 'Contoh konten Instagram', 'https://instagram.com/p/abc123', '2024-01-16', 'Media Sosial', 2000, 75, 'Positif', 'Promosi'],
-        [3, 'Website', 'Artikel berita terbaru', 'https://website.com/artikel', '2024-01-17', 'Online', 5000, 120, 'Netral', 'Berita']
-      ],
-      'media-sosial': [
-        ['No', 'Platform', 'Jenis Konten', 'Caption/Judul', 'Tanggal Post', 'Waktu Post', 'Hashtags', 'Reach', 'Impressions', 'Engagement', 'Comments', 'Shares'],
-        [1, 'Facebook', 'Image Post', 'Contoh caption untuk Facebook', '2024-01-15', '10:00', '#contoh #facebook', 1500, 2000, 50, 10, 5],
-        [2, 'Instagram', 'Stories', 'Instagram stories content', '2024-01-16', '14:30', '#instagram #stories', 800, 1200, 30, 5, 2],
-        [3, 'Twitter', 'Tweet', 'Tweet example content', '2024-01-17', '09:15', '#twitter #content', 500, 800, 25, 8, 3]
-      ],
-      'siaran-pers': [
-        ['No', 'Judul Siaran Pers', 'Tanggal Rilis', 'Media Target', 'Status Publikasi', 'Link Publikasi', 'Reach Estimasi', 'Kategori Berita'],
-        [1, 'Contoh Judul Siaran Pers', '2024-01-15', 'Media Nasional', 'Published', 'https://media.com/news/123', 10000, 'Corporate'],
-        [2, 'Press Release Example', '2024-01-16', 'Media Regional', 'Sent', '', 5000, 'Product Launch'],
-        [3, 'Siaran Pers Kegiatan', '2024-01-17', 'Media Online', 'Published', 'https://online.com/pr/456', 7500, 'Event']
+      'SKORING_PUBLIKASI_MEDIA': [
+        ['Link Berita Media Online', 'Link Media Sosial', 'Monitoring Radio', 'Monitoring Media cetak', 'Monitoring Running Text', 'Monitoring Siaran TV'],
+        ['https://pelayananpublik.id/2025/05/23/tingkatkan-layanan-internet-pln-icon-plus-sumbagut-komitmen-lakukan-perbaikan-dan-peningkatan-jaringan-fiber-optic/', 'https://www.instagram.com/p/DKSAWthwXZ/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==', 'https://drive.google.com/file/d/1PzHzxRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link', 'https://drive.google.com/file/d/1Qz4F5xRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link', 'https://drive.google.com/file/d/1Rz6G7xRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link', 'https://drive.google.com/file/d/1Sz8H9xRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link'],
+        ['https://indiespost.id/2025/06/23/promosi-produk-ke-masyarakat-iconnet-bareng-con-terjun-ke-salon-pelanggan-bagi-bagi-hadiah/', 'https://www.instagram.com/p/DKgSmSthqvA/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==', '', '', '', ''],
+        ['https://www.realitynews.id/2025/05/tingkatkan-layanan-internet-pln-icon.html', 'https://www.instagram.com/p/DKZJKuBRJ7/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==', '', '', '', '']
       ],
       'default': [
-        ['No', 'Judul/Nama Kegiatan', 'Tanggal', 'Deskripsi', 'Target/KPI', 'Hasil Actual', 'Satuan', 'Keterangan'],
-        [1, 'Contoh Kegiatan 1', '2024-01-15', 'Deskripsi kegiatan pertama', 100, 95, 'Unit', 'Berhasil'],
-        [2, 'Contoh Kegiatan 2', '2024-01-16', 'Deskripsi kegiatan kedua', 200, 180, 'Unit', 'Dalam Progress'],
-        [3, 'Contoh Kegiatan 3', '2024-01-17', 'Deskripsi kegiatan ketiga', 150, 160, 'Unit', 'Melampaui Target']
+        ['Link Berita Media Online', 'Link Media Sosial', 'Monitoring Radio', 'Monitoring Media cetak', 'Monitoring Running Text', 'Monitoring Siaran TV'],
+        ['https://example.com/news1', 'https://instagram.com/p/example1', 'https://drive.google.com/file/d/audio1', 'https://drive.google.com/file/d/print1', 'https://drive.google.com/file/d/runtext1', 'https://drive.google.com/file/d/tv1'],
+        ['https://example.com/news2', 'https://instagram.com/p/example2', '', '', '', ''],
+        ['https://example.com/news3', 'https://instagram.com/p/example3', '', '', '', '']
       ]
     };
 
@@ -172,60 +162,77 @@ const UploadInterface = () => {
       setProcessStatus("Mengunggah file...");
       setUploadProgress(25);
 
-      // Call edge function
-      console.log('🚀 Calling edge function...');
-      console.log('📋 Upload details:', {
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        indicator: selectedIndicator,
-        userId: user.id
-      });
-      
-      const { data, error } = await supabase.functions.invoke('process-report-upload', {
-        body: formData,
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        }
-      });
-      
-      console.log('📨 Edge function response received:', { data, error });
+      // Read and process Excel file directly
+      console.log('📊 Reading Excel file...');
+      const fileBuffer = await selectedFile.arrayBuffer();
+      const workbook = XLSX.read(fileBuffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const excelData = XLSX.utils.sheet_to_json(worksheet);
 
-      if (error) {
-        console.error('❌ Edge function error:', error);
-        throw new Error(error.message || 'Terjadi kesalahan saat memproses file');
+      if (!excelData || excelData.length === 0) {
+        throw new Error("File Excel kosong atau tidak valid");
       }
 
-      setProcessStatus("Memvalidasi file...");
+      console.log('📋 Excel data loaded:', {
+        rows: excelData.length,
+        columns: Object.keys(excelData[0] || {})
+      });
+
+      setProcessStatus("Menyimpan laporan...");
       setUploadProgress(50);
 
-      // Check response
-      if (!data) {
-        throw new Error('Tidak ada response dari server');
+      // Create report record
+      const { data: reportData, error: reportError } = await supabase
+        .from('reports')
+        .insert({
+          user_id: user.id,
+          indicator_type: selectedIndicator,
+          file_name: selectedFile.name,
+          status: 'processing',
+          raw_data: { 
+            fileName: selectedFile.name, 
+            fileSize: selectedFile.size,
+            rowCount: excelData.length,
+            columns: Object.keys(excelData[0] || {}),
+            data: excelData
+          }
+        })
+        .select()
+        .single();
+
+      if (reportError) {
+        console.error('❌ Report creation error:', reportError);
+        throw new Error('Gagal menyimpan laporan');
       }
 
-      if (!data.success) {
-        console.error('❌ Upload failed:', data.error);
-        throw new Error(data.error || 'Upload gagal');
-      }
-
-      setProcessStatus("File diterima sistem...");
+      setProcessStatus("Memproses dan memvalidasi konten media...");
       setUploadProgress(75);
 
-      // Short delay for user feedback
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setProcessStatus("Laporan sedang diproses...");
+      // Process with ETL
+      console.log('🔧 Starting ETL processing...');
+      const etlResult = await ETLProcessor.processMediaMassaReport(reportData.id, excelData);
+      
+      if (!etlResult.success) {
+        console.error('❌ ETL processing failed:', etlResult.error);
+        throw new Error(etlResult.error || "Gagal memproses konten media");
+      }
+
+      console.log('✅ ETL processing completed:', etlResult.summary);
+
+      setProcessStatus("Selesai!");
       setUploadProgress(100);
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log('🎉 Upload queued successfully!', {
-        reportId: data.report_id,
-        status: data.status
+      console.log('🎉 Upload and processing completed successfully!', {
+        reportId: reportData.id,
+        summary: etlResult.summary
       });
 
       toast({
-        title: "Laporan Berhasil Diunggah!",
-        description: "Laporan Anda telah masuk ke antrian untuk validasi sistem. Setelah validasi, laporan akan menunggu persetujuan admin sebelum dihitung skornya.",
+        title: "Laporan Berhasil Diproses!",
+        description: `Laporan berhasil diupload dan diproses. Ditemukan ${etlResult.summary.valid_items} item valid dari ${etlResult.summary.total_items} total item. Menunggu persetujuan admin.`,
       });
 
       // Reset form
