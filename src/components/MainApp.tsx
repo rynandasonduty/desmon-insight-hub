@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import Header from "./layout/Header";
 import Sidebar from "./layout/Sidebar";
@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Check, X, Clock, FileText, Filter, Upload, BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useNotifications } from "@/hooks/useNotifications";
+import { supabase } from "@/integrations/supabase/client";
 
 interface MainAppProps {
   userRole: 'admin' | 'sbu';
@@ -27,8 +29,29 @@ interface MainAppProps {
 
 const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, onSignOut }: MainAppProps) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Get notification count from Supabase
+  const { notificationCount } = useNotifications(userId || undefined);
+
+  // Get current user ID from Supabase auth
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
+
+    getCurrentUser();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUserId(session?.user?.id || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleSignOut = () => {
     console.log("Sign out clicked");
@@ -69,7 +92,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
       <Header 
         userRole={userRole}
         userName={userName}
-        notificationCount={3}
+        notificationCount={notificationCount}
         onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         onSignOut={handleSignOut}
         onNotificationClick={handleNotificationClick}
@@ -87,10 +110,10 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
           <div className="max-w-7xl mx-auto space-y-6">
             <Routes>
               <Route path="/" element={<Navigate to="dashboard" replace />} />
-              <Route path="/dashboard" element={<DashboardView userRole={userRole} />} />
+              <Route path="/dashboard" element={<DashboardView userRole={userRole} userId={userId} />} />
               <Route path="/upload" element={<UploadInterface />} />
-              <Route path="/reports" element={<ReportsManagement userRole={userRole} currentSBU={currentSBU} />} />
-              <Route path="/analytics" element={<AnalyticsView userRole={userRole} currentSBU={currentSBU} />} />
+              <Route path="/reports" element={<ReportsManagement userRole={userRole} currentSBU={currentSBU} userId={userId || undefined} />} />
+              <Route path="/analytics" element={<AnalyticsView userRole={userRole} currentSBU={currentSBU} userId={userId || undefined} />} />
               <Route path="/notifications" element={<NotificationCenter userRole={userRole} />} />
               
               {/* SBU specific routes */}
@@ -122,7 +145,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
 };
 
 // Dashboard View Component
-const DashboardView = ({ userRole }: { userRole: 'admin' | 'sbu' }) => {
+const DashboardView = ({ userRole, userId }: { userRole: 'admin' | 'sbu'; userId: string | null }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -162,10 +185,10 @@ const DashboardView = ({ userRole }: { userRole: 'admin' | 'sbu' }) => {
         </p>
       </div>
       
-      <DashboardStats userRole={userRole} />
+      <DashboardStats userRole={userRole} userId={userId || undefined} />
       
       <div className="grid gap-6 lg:grid-cols-2">
-        <RecentActivity />
+        <RecentActivity userRole={userRole} userId={userId || undefined} />
         
         <Card>
           <CardHeader>

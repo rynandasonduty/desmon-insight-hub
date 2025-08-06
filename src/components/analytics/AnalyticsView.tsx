@@ -7,69 +7,27 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts';
 import { TrendingUp, Trophy, Target, Activity, Filter, Download } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useAnalyticsMetrics, useLeaderboard, useTrendData, useCompositionData } from "@/hooks/useAnalytics";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AnalyticsViewProps {
   userRole: 'admin' | 'sbu';
   currentSBU?: string;
+  userId?: string;
 }
 
-const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsViewProps) => {
+const AnalyticsView = ({ userRole, currentSBU, userId: propUserId }: AnalyticsViewProps) => {
   const [selectedPeriod, setSelectedPeriod] = useState('semester-1-2024');
   const [selectedIndicator, setSelectedIndicator] = useState('all');
-  const [liveData, setLiveData] = useState({
-    totalReports: 1295,
-    approvalRate: 94.2,
-    averageScore: 85.7,
-    activeSBU: 18
-  });
+  
+  // Use propUserId if provided, otherwise get from auth
+  const userId = propUserId || null;
 
-  // Simulate real-time updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveData(prev => ({
-        totalReports: prev.totalReports + Math.floor(Math.random() * 3),
-        approvalRate: Math.min(100, prev.approvalRate + (Math.random() - 0.5) * 0.5),
-        averageScore: Math.max(0, prev.averageScore + (Math.random() - 0.5) * 2),
-        activeSBU: Math.min(20, prev.activeSBU + Math.floor(Math.random() * 2))
-      }));
-    }, 30000); // Update every 30 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Mock data - akan diganti dengan data real dari Supabase
-  const leaderboardData = [
-    { rank: 1, sbu: 'SBU Jawa Barat', score: 92.5, change: '+2.3' },
-    { rank: 2, sbu: 'SBU Jawa Timur', score: 89.2, change: '+1.8' },
-    { rank: 3, sbu: 'SBU DKI Jakarta', score: 87.1, change: '-0.5' },
-    { rank: 4, sbu: 'SBU Sumatra Utara', score: 84.6, change: '+3.2' },
-    { rank: 5, sbu: 'SBU Kalimantan Timur', score: 82.3, change: '+0.9' },
-    { rank: 6, sbu: 'SBU Sulawesi Selatan', score: 79.8, change: '-1.2' },
-  ];
-
-  const performanceComparisonData = [
-    { indicator: 'Siaran Pers', 'SBU Jawa Barat': 95, 'SBU Jawa Timur': 88, 'SBU DKI Jakarta': 92, rata_rata: 85 },
-    { indicator: 'Media Sosial', 'SBU Jawa Barat': 87, 'SBU Jawa Timur': 91, 'SBU DKI Jakarta': 89, rata_rata: 82 },
-    { indicator: 'Skoring Media', 'SBU Jawa Barat': 94, 'SBU Jawa Timur': 86, 'SBU DKI Jakarta': 83, rata_rata: 79 },
-    { indicator: 'Kampanye Komun.', 'SBU Jawa Barat': 78, 'SBU Jawa Timur': 85, 'SBU DKI Jakarta': 87, rata_rata: 75 },
-  ];
-
-  const trendData = [
-    { month: 'Jan', total_laporan: 145, approved: 132, rejected: 13 },
-    { month: 'Feb', total_laporan: 168, approved: 155, rejected: 13 },
-    { month: 'Mar', total_laporan: 192, approved: 178, rejected: 14 },
-    { month: 'Apr', total_laporan: 234, approved: 218, rejected: 16 },
-    { month: 'May', total_laporan: 267, approved: 245, rejected: 22 },
-    { month: 'Jun', total_laporan: 289, approved: 271, rejected: 18 },
-  ];
-
-  const activityCompositionData = [
-    { name: 'Siaran Pers', value: 35, color: 'hsl(var(--primary))' },
-    { name: 'Konten Media Sosial', value: 28, color: 'hsl(var(--secondary))' },
-    { name: 'Publikasi Media Massa', value: 20, color: 'hsl(var(--accent))' },
-    { name: 'Kampanye Komunikasi', value: 12, color: 'hsl(var(--desmon-primary))' },
-    { name: 'Tindaklanjut OFI', value: 5, color: 'hsl(var(--desmon-secondary))' },
-  ];
+  // Use hooks to fetch data
+  const { metrics, loading: metricsLoading } = useAnalyticsMetrics(userRole, userId || undefined);
+  const { leaderboard, loading: leaderboardLoading } = useLeaderboard();
+  const { trendData, loading: trendLoading } = useTrendData(userRole, userId || undefined);
+  const { compositionData, loading: compositionLoading } = useCompositionData(userRole, userId || undefined);
 
   const chartConfig = {
     total_laporan: {
@@ -88,6 +46,14 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
 
   const isCurrentUserSBU = (sbuName: string) => userRole === 'sbu' && sbuName === currentSBU;
 
+  // Mock performance comparison data - this would need more complex queries
+  const performanceComparisonData = [
+    { indicator: 'Siaran Pers', 'SBU Jawa Barat': 95, 'SBU Jawa Timur': 88, 'SBU DKI Jakarta': 92, rata_rata: 85 },
+    { indicator: 'Media Sosial', 'SBU Jawa Barat': 87, 'SBU Jawa Timur': 91, 'SBU DKI Jakarta': 89, rata_rata: 82 },
+    { indicator: 'Skoring Media', 'SBU Jawa Barat': 94, 'SBU Jawa Timur': 86, 'SBU DKI Jakarta': 83, rata_rata: 79 },
+    { indicator: 'Kampanye Komun.', 'SBU Jawa Barat': 78, 'SBU Jawa Timur': 85, 'SBU DKI Jakarta': 87, rata_rata: 75 },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -102,7 +68,7 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
           </h1>
           <p className="text-muted-foreground">
             Visualisasi kinerja dan insight data real-time DASHMON+
-            {userRole === 'sbu' && (
+            {userRole === 'sbu' && currentSBU && (
               <span className="block text-sm text-primary font-medium">
                 Data untuk {currentSBU}
               </span>
@@ -149,7 +115,13 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{liveData.totalReports.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {metricsLoading ? (
+                <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+              ) : (
+                metrics?.totalReports?.toLocaleString() || 0
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               <span className="text-desmon-secondary">+12.5%</span> dari bulan lalu
               <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
@@ -163,7 +135,13 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{liveData.approvalRate.toFixed(1)}%</div>
+            <div className="text-2xl font-bold">
+              {metricsLoading ? (
+                <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+              ) : (
+                `${metrics?.approvalRate?.toFixed(1) || 0}%`
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               <span className="text-desmon-secondary">+2.1%</span> dari target
               <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
@@ -177,7 +155,13 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{liveData.averageScore.toFixed(1)}</div>
+            <div className="text-2xl font-bold">
+              {metricsLoading ? (
+                <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+              ) : (
+                metrics?.averageScore?.toFixed(1) || 0
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               <span className="text-desmon-secondary">+4.8%</span> improvement
               <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
@@ -191,9 +175,15 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
             <Trophy className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{liveData.activeSBU}/20</div>
+            <div className="text-2xl font-bold">
+              {metricsLoading ? (
+                <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+              ) : (
+                `${metrics?.activeSBU || 0}/20`
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {((liveData.activeSBU / 20) * 100).toFixed(0)}% partisipasi aktif
+              {((metrics?.activeSBU || 0) / 20 * 100).toFixed(0)}% partisipasi aktif
               <span className="ml-2 w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse"></span>
             </p>
           </CardContent>
@@ -222,48 +212,73 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {leaderboardData.map((item) => (
-                  <div
-                    key={item.rank}
-                    className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                      isCurrentUserSBU(item.sbu) 
-                        ? 'bg-desmon-primary/5 border-desmon-primary/20 ring-1 ring-desmon-primary/10' 
-                        : 'bg-background hover:bg-muted/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
-                        item.rank === 1 ? 'bg-yellow-100 text-yellow-800' :
-                        item.rank === 2 ? 'bg-gray-100 text-gray-800' :
-                        item.rank === 3 ? 'bg-orange-100 text-orange-800' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {item.rank}
+              {leaderboardLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <div key={index} className="flex items-center justify-between p-4 rounded-lg border">
+                      <div className="flex items-center gap-4">
+                        <div className="w-8 h-8 bg-muted animate-pulse rounded-full" />
+                        <div className="space-y-2">
+                          <div className="h-4 bg-muted animate-pulse rounded w-32" />
+                          <div className="h-3 bg-muted animate-pulse rounded w-20" />
+                        </div>
                       </div>
-                      <div>
-                        <p className={`font-medium ${isCurrentUserSBU(item.sbu) ? 'text-desmon-primary font-semibold' : ''}`}>
-                          {item.sbu}
-                          {isCurrentUserSBU(item.sbu) && (
-                            <Badge variant="secondary" className="ml-2 bg-desmon-primary/10 text-desmon-primary">
-                              Anda
-                            </Badge>
-                          )}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Perubahan: <span className={item.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}>
-                            {item.change}
-                          </span>
-                        </p>
+                      <div className="text-right">
+                        <div className="h-6 bg-muted animate-pulse rounded w-12 mb-1" />
+                        <div className="h-3 bg-muted animate-pulse rounded w-16" />
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold">{item.score}</p>
-                      <p className="text-sm text-muted-foreground">Skor Total</p>
+                  ))}
+                </div>
+              ) : leaderboard.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Belum ada data peringkat</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {leaderboard.map((item) => (
+                    <div
+                      key={item.rank}
+                      className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                        isCurrentUserSBU(item.sbu) 
+                          ? 'bg-desmon-primary/5 border-desmon-primary/20 ring-1 ring-desmon-primary/10' 
+                          : 'bg-background hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                          item.rank === 1 ? 'bg-yellow-100 text-yellow-800' :
+                          item.rank === 2 ? 'bg-gray-100 text-gray-800' :
+                          item.rank === 3 ? 'bg-orange-100 text-orange-800' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {item.rank}
+                        </div>
+                        <div>
+                          <p className={`font-medium ${isCurrentUserSBU(item.sbu) ? 'text-desmon-primary font-semibold' : ''}`}>
+                            {item.sbu}
+                            {isCurrentUserSBU(item.sbu) && (
+                              <Badge variant="secondary" className="ml-2 bg-desmon-primary/10 text-desmon-primary">
+                                Anda
+                              </Badge>
+                            )}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Perubahan: <span className={item.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}>
+                              {item.change}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold">{item.score}</p>
+                        <p className="text-sm text-muted-foreground">Skor Total</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -307,20 +322,29 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={chartConfig} className="h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Legend />
-                    <Line type="monotone" dataKey="total_laporan" stroke="hsl(var(--primary))" strokeWidth={2} />
-                    <Line type="monotone" dataKey="approved" stroke="hsl(var(--desmon-secondary))" strokeWidth={2} />
-                    <Line type="monotone" dataKey="rejected" stroke="hsl(var(--destructive))" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartContainer>
+              {trendLoading ? (
+                <div className="h-[400px] flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="h-8 w-32 bg-muted animate-pulse rounded mx-auto mb-4" />
+                    <p className="text-muted-foreground">Memuat data tren...</p>
+                  </div>
+                </div>
+              ) : (
+                <ChartContainer config={chartConfig} className="h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={trendData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Legend />
+                      <Line type="monotone" dataKey="total_laporan" stroke="hsl(var(--primary))" strokeWidth={2} />
+                      <Line type="monotone" dataKey="approved" stroke="hsl(var(--desmon-secondary))" strokeWidth={2} />
+                      <Line type="monotone" dataKey="rejected" stroke="hsl(var(--destructive))" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -335,27 +359,43 @@ const AnalyticsView = ({ userRole, currentSBU = 'SBU Jawa Barat' }: AnalyticsVie
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartContainer config={chartConfig} className="h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={activityCompositionData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={120}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {activityCompositionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </ChartContainer>
+              {compositionLoading ? (
+                <div className="h-[400px] flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="h-8 w-32 bg-muted animate-pulse rounded mx-auto mb-4" />
+                    <p className="text-muted-foreground">Memuat data komposisi...</p>
+                  </div>
+                </div>
+              ) : compositionData.length === 0 ? (
+                <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+                  <div className="text-center">
+                    <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Belum ada data komposisi</p>
+                  </div>
+                </div>
+              ) : (
+                <ChartContainer config={chartConfig} className="h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={compositionData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, value }) => `${name} ${value}%`}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {compositionData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

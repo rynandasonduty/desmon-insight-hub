@@ -38,10 +38,13 @@ const KPIManagement = () => {
   const [kpis, setKpis] = useState<KPIDefinition[]>([]);
   const [scoringRanges, setScoringRanges] = useState<ScoringRange[]>([]);
   const [selectedKPI, setSelectedKPI] = useState<KPIDefinition | null>(null);
+  const [selectedKPIForRanges, setSelectedKPIForRanges] = useState<KPIDefinition | null>(null);
+  const [editingRanges, setEditingRanges] = useState<ScoringRange[]>([]);
   const [isAddKPIOpen, setIsAddKPIOpen] = useState(false);
   const [isEditKPIOpen, setIsEditKPIOpen] = useState(false);
   const [isEditRangesOpen, setIsEditRangesOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [savingRanges, setSavingRanges] = useState(false);
   const { toast } = useToast();
 
   const [newKPI, setNewKPI] = useState({
@@ -93,6 +96,143 @@ const KPIManagement = () => {
     }
   };
 
+  const handleEditRanges = (kpi: KPIDefinition) => {
+    setSelectedKPIForRanges(kpi);
+    const kpiRanges = scoringRanges.filter(range => range.kpi_id === kpi.id);
+    
+    // If no ranges exist, create default ranges
+    if (kpiRanges.length === 0) {
+      setEditingRanges([
+        { id: 'temp-1', kpi_id: kpi.id, min_percentage: 0, max_percentage: 25, score_value: 1 },
+        { id: 'temp-2', kpi_id: kpi.id, min_percentage: 26, max_percentage: 50, score_value: 2 },
+        { id: 'temp-3', kpi_id: kpi.id, min_percentage: 51, max_percentage: 75, score_value: 3 },
+        { id: 'temp-4', kpi_id: kpi.id, min_percentage: 76, max_percentage: 100, score_value: 4 },
+        { id: 'temp-5', kpi_id: kpi.id, min_percentage: 101, max_percentage: 999, score_value: 5 }
+      ]);
+    } else {
+      setEditingRanges([...kpiRanges]);
+    }
+    
+    setIsEditRangesOpen(true);
+  };
+
+  const handleAddRange = () => {
+    const newRange: ScoringRange = {
+      id: `temp-${Date.now()}`,
+      kpi_id: selectedKPIForRanges?.id || '',
+      min_percentage: 0,
+      max_percentage: 100,
+      score_value: 1
+    };
+    setEditingRanges([...editingRanges, newRange]);
+  };
+
+  const handleUpdateRange = (index: number, field: keyof ScoringRange, value: number) => {
+    const updatedRanges = [...editingRanges];
+    updatedRanges[index] = { ...updatedRanges[index], [field]: value };
+    setEditingRanges(updatedRanges);
+  };
+
+  const handleDeleteRange = (index: number) => {
+    const updatedRanges = editingRanges.filter((_, i) => i !== index);
+    setEditingRanges(updatedRanges);
+  };
+
+  const validateRanges = (ranges: ScoringRange[]): string | null => {
+    if (ranges.length === 0) {
+      return "Minimal harus ada satu rentang scoring";
+    }
+
+    // Sort ranges by min_percentage
+    const sortedRanges = [...ranges].sort((a, b) => a.min_percentage - b.min_percentage);
+
+    for (let i = 0; i < sortedRanges.length; i++) {
+      const range = sortedRanges[i];
+      
+      // Check if min is less than max
+      if (range.min_percentage >= range.max_percentage) {
+        return `Rentang ${i + 1}: Nilai minimum harus lebih kecil dari nilai maksimum`;
+      }
+
+      // Check for overlaps with next range
+      if (i < sortedRanges.length - 1) {
+        const nextRange = sortedRanges[i + 1];
+        if (range.max_percentage >= nextRange.min_percentage) {
+          return `Rentang ${i + 1} dan ${i + 2}: Rentang tidak boleh tumpang tindih`;
+        }
+      }
+
+      // Check for valid score values
+      if (range.score_value < 1 || range.score_value > 5) {
+        return `Rentang ${i + 1}: Nilai skor harus antara 1-5`;
+      }
+    }
+
+    return null;
+  };
+
+  const handleSaveRanges = async () => {
+    if (!selectedKPIForRanges) return;
+
+    // Validate ranges
+    const validationError = validateRanges(editingRanges);
+    if (validationError) {
+      toast({
+        title: "Validasi Error",
+        description: validationError,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSavingRanges(true);
+    
+    try {
+      // First, delete existing ranges for this KPI
+      const { error: deleteError } = await supabase
+        .from('kpi_scoring_ranges')
+        .delete()
+        .eq('kpi_id', selectedKPIForRanges.id);
+
+      if (deleteError) throw deleteError;
+
+      // Then insert new ranges
+      const rangesToInsert = editingRanges.map(range => ({
+        kpi_id: selectedKPIForRanges.id,
+        min_percentage: range.min_percentage,
+        max_percentage: range.max_percentage,
+        score_value: range.score_value
+      }));
+
+      const { error: insertError } = await supabase
+        .from('kpi_scoring_ranges')
+        .insert(rangesToInsert);
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Berhasil",
+        description: "Rentang scoring berhasil diperbarui",
+      });
+
+      // Refresh data
+      await fetchScoringRanges();
+      setIsEditRangesOpen(false);
+      setEditingRanges([]);
+      setSelectedKPIForRanges(null);
+
+    } catch (error: any) {
+      console.error('Error saving ranges:', error);
+      toast({
+        title: "Error",
+        description: "Gagal menyimpan rentang scoring",
+        variant: "destructive"
+      });
+    } finally {
+      setSavingRanges(false);
+    }
+  };
+
   const handleAddKPI = async () => {
     try {
       const { error } = await supabase
@@ -106,7 +246,6 @@ const KPIManagement = () => {
         description: "KPI baru berhasil ditambahkan",
       });
 
-      setIsAddKPIOpen(false);
       setNewKPI({
         name: '',
         code: '',
@@ -116,11 +255,13 @@ const KPIManagement = () => {
         unit: '',
         calculation_type: 'count'
       });
+      
+      setIsAddKPIOpen(false);
       fetchKPIs();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Gagal menambahkan KPI baru",
+        description: error.message || "Gagal menambahkan KPI",
         variant: "destructive",
       });
     }
@@ -138,8 +279,7 @@ const KPIManagement = () => {
           target_value: selectedKPI.target_value,
           weight_percentage: selectedKPI.weight_percentage,
           unit: selectedKPI.unit,
-          calculation_type: selectedKPI.calculation_type,
-          is_active: selectedKPI.is_active
+          calculation_type: selectedKPI.calculation_type
         })
         .eq('id', selectedKPI.id);
 
@@ -152,10 +292,10 @@ const KPIManagement = () => {
 
       setIsEditKPIOpen(false);
       fetchKPIs();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Gagal memperbarui KPI",
+        description: error.message || "Gagal memperbarui KPI",
         variant: "destructive",
       });
     }
@@ -163,6 +303,13 @@ const KPIManagement = () => {
 
   const handleDeleteKPI = async (id: string) => {
     try {
+      // First delete associated scoring ranges
+      await supabase
+        .from('kpi_scoring_ranges')
+        .delete()
+        .eq('kpi_id', id);
+
+      // Then delete the KPI
       const { error } = await supabase
         .from('kpi_definitions')
         .delete()
@@ -176,26 +323,21 @@ const KPIManagement = () => {
       });
 
       fetchKPIs();
-    } catch (error) {
+      fetchScoringRanges();
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Gagal menghapus KPI",
+        description: error.message || "Gagal menghapus KPI",
         variant: "destructive",
       });
     }
   };
 
-  const getKPIScoringRanges = (kpiId: string) => {
-    return scoringRanges.filter(range => range.kpi_id === kpiId);
-  };
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Memuat data KPI...</p>
-        </div>
+      <div className="space-y-6">
+        <div className="h-8 bg-muted animate-pulse rounded" />
+        <div className="h-64 bg-muted animate-pulse rounded" />
       </div>
     );
   }
@@ -203,11 +345,11 @@ const KPIManagement = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Manajemen KPI</h1>
           <p className="text-muted-foreground">
-            Atur target, bobot, dan aturan scoring untuk setiap indikator kinerja
+            Kelola definisi KPI dan aturan scoring sistem
           </p>
         </div>
         
@@ -222,7 +364,7 @@ const KPIManagement = () => {
             <DialogHeader>
               <DialogTitle>Tambah KPI Baru</DialogTitle>
               <DialogDescription>
-                Buat definisi KPI baru dengan target dan bobot yang sesuai
+                Buat definisi KPI baru untuk sistem penilaian
               </DialogDescription>
             </DialogHeader>
             
@@ -233,7 +375,7 @@ const KPIManagement = () => {
                   id="name"
                   value={newKPI.name}
                   onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
-                  placeholder="Contoh: Produksi Siaran Pers"
+                  placeholder="Contoh: Publikasi Media Sosial"
                 />
               </div>
               
@@ -242,8 +384,8 @@ const KPIManagement = () => {
                 <Input
                   id="code"
                   value={newKPI.code}
-                  onChange={(e) => setNewKPI({...newKPI, code: e.target.value.toUpperCase()})}
-                  placeholder="Contoh: SIARAN_PERS"
+                  onChange={(e) => setNewKPI({...newKPI, code: e.target.value})}
+                  placeholder="Contoh: media-sosial"
                 />
               </div>
               
@@ -253,7 +395,7 @@ const KPIManagement = () => {
                   id="description"
                   value={newKPI.description}
                   onChange={(e) => setNewKPI({...newKPI, description: e.target.value})}
-                  placeholder="Deskripsi detail tentang KPI ini"
+                  placeholder="Deskripsi detail tentang KPI ini..."
                 />
               </div>
               
@@ -288,13 +430,16 @@ const KPIManagement = () => {
                     id="unit"
                     value={newKPI.unit}
                     onChange={(e) => setNewKPI({...newKPI, unit: e.target.value})}
-                    placeholder="dokumen, konten, poin"
+                    placeholder="posts, artikel, dll"
                   />
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="calculation">Tipe Kalkulasi</Label>
-                  <Select value={newKPI.calculation_type} onValueChange={(value: any) => setNewKPI({...newKPI, calculation_type: value})}>
+                  <Select 
+                    value={newKPI.calculation_type} 
+                    onValueChange={(value: any) => setNewKPI({...newKPI, calculation_type: value})}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -322,130 +467,92 @@ const KPIManagement = () => {
       </div>
 
       {/* Main Content */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs defaultValue="definitions" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="overview">Overview KPI</TabsTrigger>
+          <TabsTrigger value="definitions">Definisi KPI</TabsTrigger>
           <TabsTrigger value="scoring">Aturan Scoring</TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total KPI</CardTitle>
-                <Target className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{kpis.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  {kpis.filter(kpi => kpi.is_active).length} aktif
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Bobot</CardTitle>
-                <Percent className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {kpis.reduce((sum, kpi) => sum + kpi.weight_percentage, 0)}%
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Target: 100%
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Aturan Scoring</CardTitle>
-                <Calculator className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{scoringRanges.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  Total rentang nilai
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
+        {/* KPI Definitions Tab */}
+        <TabsContent value="definitions" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Daftar KPI</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                Daftar KPI
+              </CardTitle>
               <CardDescription>
-                Kelola definisi dan konfigurasi KPI yang digunakan dalam sistem
+                Kelola definisi dan konfigurasi Key Performance Indicators
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama KPI</TableHead>
-                    <TableHead>Kode</TableHead>
-                    <TableHead>Target</TableHead>
-                    <TableHead>Bobot</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {kpis.map((kpi) => (
-                    <TableRow key={kpi.id}>
-                      <TableCell className="font-medium">{kpi.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{kpi.code}</Badge>
-                      </TableCell>
-                      <TableCell>{kpi.target_value.toLocaleString()} {kpi.unit}</TableCell>
-                      <TableCell>{kpi.weight_percentage}%</TableCell>
-                      <TableCell>
+              <div className="space-y-4">
+                {kpis.map((kpi) => (
+                  <div key={kpi.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{kpi.name}</h3>
                         <Badge variant={kpi.is_active ? "default" : "secondary"}>
                           {kpi.is_active ? "Aktif" : "Nonaktif"}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedKPI(kpi);
-                              setIsEditKPIOpen(true);
-                            }}
-                          >
-                            <Edit className="h-3 w-3" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {kpi.description || 'Tidak ada deskripsi'}
+                      </p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>Target: {kpi.target_value.toLocaleString()} {kpi.unit}</span>
+                        <span>Bobot: {kpi.weight_percentage}%</span>
+                        <span>Tipe: {kpi.calculation_type}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedKPI(kpi);
+                          setIsEditKPIOpen(true);
+                        }}
+                      >
+                        <Edit className="mr-2 h-3 w-3" />
+                        Edit
+                      </Button>
+                      
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Trash2 className="mr-2 h-3 w-3" />
+                            Hapus
                           </Button>
-                          
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Hapus KPI</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Yakin ingin menghapus KPI "{kpi.name}"? Tindakan ini tidak dapat dibatalkan.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Batal</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteKPI(kpi.id)}>
-                                  Hapus
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Konfirmasi Hapus</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Apakah Anda yakin ingin menghapus KPI "{kpi.name}"? 
+                              Tindakan ini akan menghapus semua aturan scoring terkait dan tidak dapat dibatalkan.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteKPI(kpi.id)}>
+                              Hapus
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                ))}
+                
+                {kpis.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Belum ada KPI yang didefinisikan</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -454,24 +561,32 @@ const KPIManagement = () => {
         <TabsContent value="scoring" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Aturan Scoring KPI</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Calculator className="h-5 w-5" />
+                Aturan Scoring
+              </CardTitle>
               <CardDescription>
-                Tabel konversi persentase pencapaian menjadi nilai skor untuk setiap KPI
+                Konfigurasi rentang pencapaian dan nilai skor untuk setiap KPI
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               {kpis.map((kpi) => {
-                const ranges = getKPIScoringRanges(kpi.id);
+                const ranges = scoringRanges.filter(range => range.kpi_id === kpi.id);
+                
                 return (
-                  <div key={kpi.id} className="mb-6 p-4 border rounded-lg">
-                    <div className="flex justify-between items-center mb-4">
+                  <div key={kpi.id} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-4">
                       <div>
-                        <h3 className="font-medium">{kpi.name}</h3>
+                        <h3 className="font-semibold">{kpi.name}</h3>
                         <p className="text-sm text-muted-foreground">
                           Target: {kpi.target_value.toLocaleString()} {kpi.unit} | Bobot: {kpi.weight_percentage}%
                         </p>
                       </div>
-                      <Button variant="outline" size="sm">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleEditRanges(kpi)}
+                      >
                         <Settings className="mr-2 h-3 w-3" />
                         Edit Rentang
                       </Button>
@@ -603,6 +718,84 @@ const KPIManagement = () => {
             <Button onClick={handleUpdateKPI}>
               <Save className="mr-2 h-4 w-4" />
               Simpan
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Ranges Dialog */}
+      <Dialog open={isEditRangesOpen} onOpenChange={setIsEditRangesOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Rentang Scoring</DialogTitle>
+            <DialogDescription>
+              Atur rentang pencapaian dan nilai skor untuk KPI: {selectedKPIForRanges?.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4 max-h-96 overflow-y-auto">
+            {editingRanges.map((range, index) => (
+              <div key={range.id} className="flex items-center gap-2 p-3 border rounded-lg">
+                <div className="flex-1 grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Min %</Label>
+                    <Input
+                      type="number"
+                      value={range.min_percentage}
+                      onChange={(e) => handleUpdateRange(index, 'min_percentage', Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Max %</Label>
+                    <Input
+                      type="number"
+                      value={range.max_percentage}
+                      onChange={(e) => handleUpdateRange(index, 'max_percentage', Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Skor</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="5"
+                      value={range.score_value}
+                      onChange={(e) => handleUpdateRange(index, 'score_value', Number(e.target.value))}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDeleteRange(index)}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+            
+            <Button
+              variant="outline"
+              onClick={handleAddRange}
+              className="w-full"
+              disabled={editingRanges.length >= 10}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Tambah Rentang
+            </Button>
+          </div>
+          
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setIsEditRangesOpen(false)}>
+              Batal
+            </Button>
+            <Button onClick={handleSaveRanges} disabled={savingRanges}>
+              <Save className="mr-2 h-4 w-4" />
+              {savingRanges ? 'Menyimpan...' : 'Simpan'}
             </Button>
           </div>
         </DialogContent>

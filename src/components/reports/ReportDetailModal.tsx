@@ -8,25 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, Download, Eye, Clock, User, Calendar, FileText, Video, BarChart3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Report } from "@/hooks/useReports";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ReportDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  report: {
-    id: string;
-    fileName: string;
-    submitter: string;
-    status: 'pending' | 'approved' | 'rejected' | 'processing';
-    submittedAt: string;
-    sbu?: string;
-    indicatorType: string;
-    score?: number;
-    rawData?: any;
-    processedData?: any;
-    videoUrl?: string;
-    rejectionReason?: string;
-    approvalNotes?: string;
-  };
+  report: Report;
   userRole: 'admin' | 'sbu';
   onApprove?: (reportId: string, notes?: string) => void;
   onReject?: (reportId: string, reason: string) => void;
@@ -98,16 +86,50 @@ const ReportDetailModal = ({
     }
   };
 
-  const handleDownload = () => {
-    toast({
-      title: "Mengunduh File",
-      description: `File ${report.fileName} sedang diunduh.`,
-    });
+  const handleDownload = async () => {
+    if (!report.filePath) {
+      toast({
+        title: "Error",
+        description: "File tidak tersedia untuk diunduh.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('reports')
+        .download(report.filePath);
+
+      if (error) throw error;
+
+      // Create download link
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = report.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Download Berhasil",
+        description: `File ${report.fileName} berhasil diunduh.`,
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Error",
+        description: "Gagal mengunduh file.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleOpenVideo = () => {
-    if (report.videoUrl) {
-      window.open(report.videoUrl, '_blank');
+  const handleOpenVideo = (videoLink: string) => {
+    if (videoLink) {
+      window.open(videoLink, '_blank');
     } else {
       toast({
         title: "Video Tidak Tersedia",
@@ -117,18 +139,35 @@ const ReportDetailModal = ({
     }
   };
 
-  // Mock processed data
-  const mockProcessedData = {
-    totalEntries: 156,
-    validEntries: 142,
-    errorEntries: 14,
-    score: report.score || 87.5,
-    indicators: {
-      'siaran-pers': { count: 45, score: 92 },
-      'media-sosial': { count: 78, score: 85 },
-      'publikasi-media': { count: 23, score: 91 }
+  // Process actual data from report
+  const processedData = report.processedData || {};
+  const videoLinks = report.videoLinks || [];
+  
+  // Calculate stats from processed data
+  const getDataStats = () => {
+    if (!processedData || typeof processedData !== 'object') {
+      return {
+        totalEntries: 0,
+        validEntries: 0,
+        errorEntries: 0,
+        score: report.calculatedScore || 0
+      };
     }
+
+    // Try to extract stats from processed data structure
+    const totalEntries = processedData.totalEntries || processedData.total_rows || 0;
+    const validEntries = processedData.validEntries || processedData.valid_rows || totalEntries;
+    const errorEntries = processedData.errorEntries || processedData.error_rows || (totalEntries - validEntries);
+
+    return {
+      totalEntries,
+      validEntries,
+      errorEntries,
+      score: report.calculatedScore || processedData.score || 0
+    };
   };
+
+  const dataStats = getDataStats();
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -165,14 +204,12 @@ const ReportDetailModal = ({
                 <CardContent className="space-y-2">
                   <div>
                     <p className="text-sm text-muted-foreground">Nama Pelapor</p>
-                    <p className="font-medium">{report.submitter}</p>
+                    <p className="font-medium">{report.submittedBy}</p>
                   </div>
-                  {report.sbu && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">SBU</p>
-                      <p className="font-medium">{report.sbu}</p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-sm text-muted-foreground">SBU</p>
+                    <p className="font-medium">{report.sbu}</p>
+                  </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Jenis Indikator</p>
                     <p className="font-medium">{report.indicatorType}</p>
@@ -196,17 +233,17 @@ const ReportDetailModal = ({
                     <p className="text-sm text-muted-foreground">Status</p>
                     <p className="font-medium capitalize">{report.status}</p>
                   </div>
-                  {report.score && (
+                  {report.calculatedScore && (
                     <div>
                       <p className="text-sm text-muted-foreground">Skor</p>
-                      <p className="font-medium text-lg text-desmon-primary">{report.score}</p>
+                      <p className="font-medium text-lg text-desmon-primary">{report.calculatedScore}</p>
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
 
-            {(report.rejectionReason || report.approvalNotes) && (
+            {(report.rejectionReason || report.approvedBy) && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Catatan Review</CardTitle>
@@ -218,10 +255,10 @@ const ReportDetailModal = ({
                       <p className="text-red-700 mt-1">{report.rejectionReason}</p>
                     </div>
                   )}
-                  {report.approvalNotes && (
+                  {report.approvedBy && report.approvedAt && (
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="font-medium text-green-800">Catatan Persetujuan:</p>
-                      <p className="text-green-700 mt-1">{report.approvalNotes}</p>
+                      <p className="font-medium text-green-800">Disetujui oleh:</p>
+                      <p className="text-green-700 mt-1">{report.approvedBy} pada {report.approvedAt}</p>
                     </div>
                   )}
                 </CardContent>
@@ -250,16 +287,21 @@ const ReportDetailModal = ({
                   </Button>
                 </div>
 
-                {report.videoUrl && (
-                  <div className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Video Pendukung</p>
-                      <p className="text-sm text-muted-foreground">Link video dokumentasi</p>
-                    </div>
-                    <Button variant="outline" onClick={handleOpenVideo}>
-                      <Video className="mr-2 h-4 w-4" />
-                      Buka Video
-                    </Button>
+                {Array.isArray(videoLinks) && videoLinks.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="font-medium">Video Pendukung</p>
+                    {videoLinks.map((link: any, index: number) => (
+                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">Video {index + 1}</p>
+                          <p className="text-sm text-muted-foreground">{typeof link === 'string' ? link : link.url || 'Link video'}</p>
+                        </div>
+                        <Button variant="outline" onClick={() => handleOpenVideo(typeof link === 'string' ? link : link.url)}>
+                          <Video className="mr-2 h-4 w-4" />
+                          Buka Video
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -276,30 +318,48 @@ const ReportDetailModal = ({
                 <CardDescription>Hasil pemrosesan dan validasi data</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Total Entri</p>
-                    <p className="text-2xl font-bold">{mockProcessedData.totalEntries}</p>
+                {dataStats.totalEntries > 0 ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Total Entri</p>
+                      <p className="text-2xl font-bold">{dataStats.totalEntries}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Entri Valid</p>
+                      <p className="text-2xl font-bold text-green-600">{dataStats.validEntries}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Entri Error</p>
+                      <p className="text-2xl font-bold text-red-600">{dataStats.errorEntries}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">Skor Akhir</p>
+                      <p className="text-2xl font-bold text-desmon-primary">{dataStats.score}</p>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Entri Valid</p>
-                    <p className="text-2xl font-bold text-green-600">{mockProcessedData.validEntries}</p>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Data analisis belum tersedia</p>
+                    <p className="text-sm">Laporan belum diproses atau sedang dalam antrian</p>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Entri Error</p>
-                    <p className="text-2xl font-bold text-red-600">{mockProcessedData.errorEntries}</p>
+                )}
+
+                {/* Show raw processed data if available for debugging */}
+                {processedData && Object.keys(processedData).length > 0 && (
+                  <div className="mt-6 p-3 bg-muted rounded-lg">
+                    <p className="text-sm font-medium mb-2">Data Terproses (Debug):</p>
+                    <pre className="text-xs overflow-auto max-h-32">
+                      {JSON.stringify(processedData, null, 2)}
+                    </pre>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Skor Akhir</p>
-                    <p className="text-2xl font-bold text-desmon-primary">{mockProcessedData.score}</p>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="actions" className="space-y-4">
-            {userRole === 'admin' && report.status === 'pending' && (
+            {userRole === 'admin' && (report.status === 'pending' || report.status === 'pending_approval') && (
               <div className="grid gap-4">
                 <Card>
                   <CardHeader>
@@ -316,7 +376,7 @@ const ReportDetailModal = ({
                         onChange={(e) => setApprovalNotes(e.target.value)}
                       />
                     </div>
-                    <Button onClick={handleApprove} className="w-full" variant="success">
+                    <Button onClick={handleApprove} className="w-full bg-green-600 hover:bg-green-700">
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Setujui Laporan
                     </Button>
@@ -359,14 +419,14 @@ const ReportDetailModal = ({
                     <Download className="mr-2 h-4 w-4" />
                     Unduh File Laporan
                   </Button>
-                  {report.videoUrl && (
-                    <Button variant="outline" onClick={handleOpenVideo} className="w-full">
+                  {Array.isArray(videoLinks) && videoLinks.length > 0 && (
+                    <Button variant="outline" onClick={() => handleOpenVideo(videoLinks[0])} className="w-full">
                       <Video className="mr-2 h-4 w-4" />
                       Lihat Video Pendukung
                     </Button>
                   )}
                   {report.status === 'rejected' && (
-                    <Button variant="hero" className="w-full">
+                    <Button variant="default" className="w-full bg-desmon-primary hover:bg-desmon-primary/90">
                       <FileText className="mr-2 h-4 w-4" />
                       Upload Ulang Perbaikan
                     </Button>
@@ -375,7 +435,7 @@ const ReportDetailModal = ({
               </Card>
             )}
 
-            {(userRole === 'admin' && report.status !== 'pending') && (
+            {(userRole === 'admin' && report.status !== 'pending' && report.status !== 'pending_approval') && (
               <Card>
                 <CardHeader>
                   <CardTitle>Aksi Admin</CardTitle>
@@ -386,8 +446,8 @@ const ReportDetailModal = ({
                     <Download className="mr-2 h-4 w-4" />
                     Unduh File Laporan
                   </Button>
-                  {report.videoUrl && (
-                    <Button variant="outline" onClick={handleOpenVideo} className="w-full">
+                  {Array.isArray(videoLinks) && videoLinks.length > 0 && (
+                    <Button variant="outline" onClick={() => handleOpenVideo(videoLinks[0])} className="w-full">
                       <Video className="mr-2 h-4 w-4" />
                       Lihat Video Pendukung
                     </Button>

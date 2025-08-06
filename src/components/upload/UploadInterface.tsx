@@ -9,6 +9,7 @@ import { Upload, Download, FileSpreadsheet, CheckCircle, AlertCircle, Loader2 } 
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
+import { useKPIDefinitions } from "@/hooks/useKPIDefinitions";
 
 const UploadInterface = () => {
   const [selectedIndicator, setSelectedIndicator] = useState<string>("");
@@ -18,13 +19,41 @@ const UploadInterface = () => {
   const [processStatus, setProcessStatus] = useState<string>("");
   const { toast } = useToast();
 
-  const indicators = [
-    {
-      id: 'skoring-publikasi-media',
-      name: 'Skoring Publikasi Media Massa',
-      description: 'Laporan dan skor publikasi di berbagai platform media massa (media sosial, online, radio, cetak, running text, TV)'
-    }
-  ];
+  // Fetch KPI definitions from Supabase
+  const { kpiDefinitions, loading: kpiLoading, error: kpiError } = useKPIDefinitions();
+
+  // Create template data for different indicator types
+  const createExcelTemplate = (indicatorType: string, indicatorName: string) => {
+    // Basic template structure based on indicator type
+    const templates: { [key: string]: any } = {
+      'skoring-publikasi-media': [
+        ['No', 'Platform', 'Judul Konten', 'Link URL', 'Tanggal Publikasi', 'Jenis Media', 'Reach/Views', 'Engagement', 'Sentiment', 'Kategori'],
+        [1, 'Facebook', 'Contoh judul post', 'https://facebook.com/post/123', '2024-01-15', 'Media Sosial', 1500, 50, 'Positif', 'Informasi'],
+        [2, 'Instagram', 'Contoh konten Instagram', 'https://instagram.com/p/abc123', '2024-01-16', 'Media Sosial', 2000, 75, 'Positif', 'Promosi'],
+        [3, 'Website', 'Artikel berita terbaru', 'https://website.com/artikel', '2024-01-17', 'Online', 5000, 120, 'Netral', 'Berita']
+      ],
+      'media-sosial': [
+        ['No', 'Platform', 'Jenis Konten', 'Caption/Judul', 'Tanggal Post', 'Waktu Post', 'Hashtags', 'Reach', 'Impressions', 'Engagement', 'Comments', 'Shares'],
+        [1, 'Facebook', 'Image Post', 'Contoh caption untuk Facebook', '2024-01-15', '10:00', '#contoh #facebook', 1500, 2000, 50, 10, 5],
+        [2, 'Instagram', 'Stories', 'Instagram stories content', '2024-01-16', '14:30', '#instagram #stories', 800, 1200, 30, 5, 2],
+        [3, 'Twitter', 'Tweet', 'Tweet example content', '2024-01-17', '09:15', '#twitter #content', 500, 800, 25, 8, 3]
+      ],
+      'siaran-pers': [
+        ['No', 'Judul Siaran Pers', 'Tanggal Rilis', 'Media Target', 'Status Publikasi', 'Link Publikasi', 'Reach Estimasi', 'Kategori Berita'],
+        [1, 'Contoh Judul Siaran Pers', '2024-01-15', 'Media Nasional', 'Published', 'https://media.com/news/123', 10000, 'Corporate'],
+        [2, 'Press Release Example', '2024-01-16', 'Media Regional', 'Sent', '', 5000, 'Product Launch'],
+        [3, 'Siaran Pers Kegiatan', '2024-01-17', 'Media Online', 'Published', 'https://online.com/pr/456', 7500, 'Event']
+      ],
+      'default': [
+        ['No', 'Judul/Nama Kegiatan', 'Tanggal', 'Deskripsi', 'Target/KPI', 'Hasil Actual', 'Satuan', 'Keterangan'],
+        [1, 'Contoh Kegiatan 1', '2024-01-15', 'Deskripsi kegiatan pertama', 100, 95, 'Unit', 'Berhasil'],
+        [2, 'Contoh Kegiatan 2', '2024-01-16', 'Deskripsi kegiatan kedua', 200, 180, 'Unit', 'Dalam Progress'],
+        [3, 'Contoh Kegiatan 3', '2024-01-17', 'Deskripsi kegiatan ketiga', 150, 160, 'Unit', 'Melampaui Target']
+      ]
+    };
+
+    return templates[indicatorType] || templates['default'];
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -53,12 +82,53 @@ const UploadInterface = () => {
     }
   };
 
-  const handleDownloadTemplate = (indicatorId: string) => {
-    // In real app, this would download the actual template
-    toast({
-      title: "Template Diunduh",
-      description: `Template untuk ${indicators.find(i => i.id === indicatorId)?.name} berhasil diunduh`,
-    });
+  const handleDownloadTemplate = async (indicatorCode: string) => {
+    try {
+      const selectedKPI = kpiDefinitions.find(kpi => kpi.code === indicatorCode);
+      if (!selectedKPI) {
+        toast({
+          title: "Error",
+          description: "Indikator tidak ditemukan",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create Excel-like CSV content
+      const templateData = createExcelTemplate(indicatorCode, selectedKPI.name);
+      
+      // Convert to CSV format
+      const csvContent = templateData
+        .map(row => row.map((cell: any) => `"${cell}"`).join(','))
+        .join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Template_${selectedKPI.name.replace(/\s+/g, '_')}.csv`);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Template Berhasil Diunduh",
+        description: `Template untuk ${selectedKPI.name} telah diunduh sebagai file CSV. Anda dapat membukanya dengan Excel dan menyimpan sebagai .xlsx`,
+      });
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      toast({
+        title: "Error",
+        description: "Gagal mengunduh template. Silakan coba lagi.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleUpload = async () => {
@@ -185,6 +255,21 @@ const UploadInterface = () => {
     }
   };
 
+  // Show loading or error states
+  if (kpiError) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+            <h3 className="text-lg font-semibold text-destructive">Error Memuat Data</h3>
+            <p className="text-muted-foreground text-center">{kpiError}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Instructions Card */}
@@ -237,31 +322,37 @@ const UploadInterface = () => {
           {/* Indicator Selection */}
           <div className="space-y-2">
             <Label htmlFor="indicator">Jenis Indikator Laporan</Label>
-            <Select value={selectedIndicator} onValueChange={setSelectedIndicator}>
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih jenis indikator..." />
-              </SelectTrigger>
-              <SelectContent>
-                {indicators.map((indicator) => (
-                  <SelectItem key={indicator.id} value={indicator.id}>
-                    <div>
-                      <div className="font-medium">{indicator.name}</div>
-                      <div className="text-sm text-muted-foreground">{indicator.description}</div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {kpiLoading ? (
+              <div className="h-10 bg-muted animate-pulse rounded" />
+            ) : (
+              <Select value={selectedIndicator} onValueChange={setSelectedIndicator}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih jenis indikator..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {kpiDefinitions.map((kpi) => (
+                    <SelectItem key={kpi.id} value={kpi.code}>
+                      <div>
+                        <div className="font-medium">{kpi.name}</div>
+                        {kpi.description && (
+                          <div className="text-sm text-muted-foreground">{kpi.description}</div>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Template Download */}
-          {selectedIndicator && (
+          {selectedIndicator && !kpiLoading && (
             <div className="p-4 bg-desmon-background/30 rounded-lg border border-desmon-secondary/20">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">Template Excel Tersedia</p>
                   <p className="text-sm text-muted-foreground">
-                    Unduh template untuk {indicators.find(i => i.id === selectedIndicator)?.name}
+                    Unduh template untuk {kpiDefinitions.find(kpi => kpi.code === selectedIndicator)?.name}
                   </p>
                 </div>
                 <Button 
@@ -320,7 +411,7 @@ const UploadInterface = () => {
           <div className="flex justify-end">
             <Button 
               onClick={handleUpload}
-              disabled={!selectedIndicator || !selectedFile || isUploading}
+              disabled={!selectedIndicator || !selectedFile || isUploading || kpiLoading}
               className="min-w-32"
               variant="hero"
             >

@@ -167,84 +167,180 @@ function transformData(extractedData: any[]) {
 async function generateVideoHashes(transformedData: any[]) {
   console.log('🔐 ETL Stage 1: Generating video hashes...');
   
-  return transformedData.map((item: any) => {
+  const processedDataPromises = transformedData.map(async (item: any) => {
     const allLinks = item.allMediaLinks || [];
     
-    if (allLinks.length > 0) {
-      // Generate hash for each link
-      const hashes = allLinks
-        .filter((link: any) => link && link.toString().trim() !== '')
-        .map((link: any) => {
-          const linkStr = link.toString();
-          // Generate hash based on URL (mock implementation)
-          const encoder = new TextEncoder();
-          const data = encoder.encode(linkStr);
-          return crypto.subtle.digest('SHA-256', data).then(hashBuffer => {
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-          });
-        });
-      
-      return Promise.all(hashes).then(resolvedHashes => ({
+    if (allLinks.length === 0) {
+      return {
         ...item,
-        videoHashes: resolvedHashes
-      }));
+        videoHashes: []
+      };
     }
     
-    return Promise.resolve({
-      ...item,
-      videoHashes: []
-    });
+    try {
+      // Filter valid links first to avoid processing empty/invalid ones
+      const validLinks = allLinks
+        .filter((link: any) => link && link.toString().trim() !== '')
+        .map((link: any) => link.toString().trim());
+      
+      if (validLinks.length === 0) {
+        return {
+          ...item,
+          videoHashes: []
+        };
+      }
+      
+      // Generate hashes for all valid links in parallel
+      const hashPromises = validLinks.map(async (linkStr: string) => {
+        try {
+          const encoder = new TextEncoder();
+          const data = encoder.encode(linkStr);
+          const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (error) {
+          console.warn('⚠️ Failed to generate hash for link:', linkStr, error);
+          // Return a fallback hash based on the link string
+          return `fallback_${linkStr.length}_${linkStr.slice(0, 8)}`;
+        }
+      });
+      
+      const resolvedHashes = await Promise.all(hashPromises);
+      
+      return {
+        ...item,
+        videoHashes: resolvedHashes
+      };
+      
+    } catch (error) {
+      console.warn('⚠️ Error processing hashes for item:', error);
+      return {
+        ...item,
+        videoHashes: [],
+        hashError: error.message
+      };
+    }
   });
+  
+  try {
+    return await Promise.all(processedDataPromises);
+  } catch (error) {
+    console.error('❌ Critical error in generateVideoHashes:', error);
+    throw new Error(`Hash generation failed: ${error.message}`);
+  }
 }
 
 async function checkDuplicates(processedData: any[], currentReportId: string) {
   console.log('🔍 ETL Stage 1: Checking for duplicates...');
   
-  // Collect all hashes from processed data
-  const allHashes: string[] = [];
+  // Collect all hashes from processed data and create a Set for efficient lookups
+  const currentHashes = new Set<string>();
   processedData.forEach(item => {
     if (item.videoHashes && Array.isArray(item.videoHashes)) {
-      allHashes.push(...item.videoHashes);
+      item.videoHashes.forEach((hash: string) => {
+        if (hash && hash.trim() !== '') {
+          currentHashes.add(hash.trim());
+        }
+      });
     }
   });
   
-  if (allHashes.length === 0) {
+  if (currentHashes.size === 0) {
+    console.log('ℹ️ No hashes to check for duplicates');
     return { hasDuplicates: false, duplicates: [] };
   }
   
-  const { data: existingReports, error } = await supabase
-    .from('reports')
-    .select('id, file_name, video_hashes')
-    .neq('id', currentReportId)
-    .not('video_hashes', 'is', null);
+  console.log(`🔍 Checking ${currentHashes.size} unique hashes for duplicates`);
   
-  if (error) {
-    console.error('❌ ETL Stage 1: Error checking duplicates:', error);
-    throw new Error('Failed to check duplicates');
-  }
-  
-  const duplicates: any[] = [];
-  
-  for (const report of existingReports || []) {
-    const existingHashes = report.video_hashes || [];
-    const commonHashes = allHashes.filter(hash => 
-      existingHashes.includes(hash)
-    );
+  try {
+    // Query existing reports with video hashes, but limit the scope
+    // Only check recent reports (last 6 months) to improve performance
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     
-    if (commonHashes.length > 0) {
-      duplicates.push({
-        reportId: report.id,
-        fileName: report.file_name,
-        duplicateHashes: commonHashes
-      });
+    const { data: existingReports, error } = await supabase
+      .from('reports')
+      .select('id, file_name, video_hashes, created_at')
+      .neq('id', currentReportId)
+      .not('video_hashes', 'is', null)
+      .gte('created_at', sixMonthsAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1000); // Reasonable limit to prevent memory issues
+    
+    if (error) {
+      console.error('❌ ETL Stage 1: Error checking duplicates:', error);
+      throw new Error(`Failed to check duplicates: ${error.message}`);
     }
+    
+    if (!existingReports || existingReports.length === 0) {
+      console.log('ℹ️ No existing reports with hashes found');
+      return { hasDuplicates: false, duplicates: [] };
+    }
+    
+    console.log(`🔍 Comparing against ${existingReports.length} existing reports`);
+    
+    const duplicates: any[] = [];
+    const currentHashArray = Array.from(currentHashes);
+    
+    // Use more efficient duplicate detection
+    for (const report of existingReports) {
+      const existingHashes = report.video_hashes;
+      
+      if (!existingHashes || !Array.isArray(existingHashes) || existingHashes.length === 0) {
+        continue;
+      }
+      
+      // Convert to Set for O(1) lookups instead of O(n) array includes
+      const existingHashSet = new Set(existingHashes.map((h: string) => h.trim()));
+      
+      // Find intersection of hash sets
+      const commonHashes = currentHashArray.filter(hash => existingHashSet.has(hash));
+      
+      if (commonHashes.length > 0) {
+        duplicates.push({
+          reportId: report.id,
+          fileName: report.file_name,
+          createdAt: report.created_at,
+          duplicateHashes: commonHashes,
+          duplicateCount: commonHashes.length
+        });
+        
+        // Early exit if we find too many duplicates (potential spam detection)
+        if (duplicates.length >= 10) {
+          console.warn('⚠️ Found excessive duplicates, stopping search');
+          break;
+        }
+      }
+    }
+    
+    // Sort duplicates by most recent first and most duplicates first
+    duplicates.sort((a, b) => {
+      if (a.duplicateCount !== b.duplicateCount) {
+        return b.duplicateCount - a.duplicateCount;
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    
+    console.log(`🔍 Found ${duplicates.length} reports with duplicate content`);
+    
+    return {
+      hasDuplicates: duplicates.length > 0,
+      duplicates: duplicates.slice(0, 5), // Limit to top 5 most relevant duplicates
+      totalCheckedReports: existingReports.length,
+      totalCurrentHashes: currentHashes.size
+    };
+    
+  } catch (error: any) {
+    console.error('❌ Critical error in checkDuplicates:', error);
+    // Don't throw here - duplicate check failure shouldn't stop the entire process
+    console.warn('⚠️ Duplicate check failed, proceeding without duplicate validation');
+    return { 
+      hasDuplicates: false, 
+      duplicates: [], 
+      error: error.message,
+      fallbackMode: true 
+    };
   }
-  
-  return {
-    hasDuplicates: duplicates.length > 0,
-    duplicates
-  };
 }
 
 // ETL Stage 2: Score Calculation (After Admin Approval)
@@ -403,19 +499,24 @@ async function processReportStage1(reportId: string) {
     // Extract and transform data
     const extractedData = extractExcelData(report.raw_data);
     const transformedData = transformData(extractedData);
-    const processedDataWithHashes = await Promise.all(await generateVideoHashes(transformedData));
+    const processedDataWithHashes = await generateVideoHashes(transformedData);
     
     // Check for duplicates
     const duplicateCheck = await checkDuplicates(processedDataWithHashes, reportId);
     
-    if (duplicateCheck.hasDuplicates) {
-      const duplicateInfo = duplicateCheck.duplicates.map(d => `${d.fileName} (${d.reportId})`).join(', ');
+    if (duplicateCheck.hasDuplicates && !duplicateCheck.fallbackMode) {
+      const duplicateInfo = duplicateCheck.duplicates
+        .slice(0, 3) // Show only top 3 duplicates in message
+        .map(d => `${d.fileName} (${d.duplicateCount} duplikat)`)
+        .join(', ');
+      
+      const totalDuplicates = duplicateCheck.duplicates.reduce((sum, d) => sum + d.duplicateCount, 0);
       
       await supabase
         .from('reports')
         .update({
           status: 'system_rejected',
-          rejection_reason: `Duplicate videos found in existing reports: ${duplicateInfo}`
+          rejection_reason: `Found ${totalDuplicates} duplicate videos in ${duplicateCheck.duplicates.length} existing reports: ${duplicateInfo}${duplicateCheck.duplicates.length > 3 ? ' and others' : ''}`
         })
         .eq('id', reportId);
       
@@ -423,11 +524,13 @@ async function processReportStage1(reportId: string) {
         report.user_id,
         'report_error',
         'Laporan Ditolak - Video Duplikat',
-        `Laporan "${report.file_name}" ditolak karena mengandung video yang sudah pernah digunakan dalam laporan: ${duplicateInfo}`,
+        `Laporan "${report.file_name}" ditolak karena mengandung ${totalDuplicates} video yang sudah pernah digunakan dalam laporan lain: ${duplicateInfo}${duplicateCheck.duplicates.length > 3 ? ' dan lainnya' : ''}`,
         reportId
       );
       
       return;
+    } else if (duplicateCheck.fallbackMode) {
+      console.warn('⚠️ Proceeding with report processing despite duplicate check failure');
     }
     
     // Calculate validation statistics
