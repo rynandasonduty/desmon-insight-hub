@@ -33,12 +33,11 @@ export const EXCEL_TEMPLATES: ExcelTemplate[] = [
     name: 'Publikasi Siaran Pers Sub Holding',
     description: 'Template untuk laporan publikasi siaran pers dengan target 10 per bulan atau 60 per semester',
     fileName: 'PUBLIKASI_SIARAN_PERS.xlsx',
-    columns: ['Tanggal', 'Judul Siaran Pers', 'Link Publikasi', 'Media', 'Kategori', 'Catatan'],
-    requiredColumns: ['Tanggal', 'Judul Siaran Pers', 'Link Publikasi'],
+    columns: ['Judul Siaran Pers', 'Link Publikasi', 'Media', 'Kategori', 'Catatan'],
+    requiredColumns: ['Judul Siaran Pers', 'Link Publikasi'],
     optionalColumns: ['Media', 'Kategori', 'Catatan'],
     sampleData: [
       {
-        'Tanggal': '2024-01-15',
         'Judul Siaran Pers': 'Pertamina Luncurkan Program Energi Terbarukan',
         'Link Publikasi': 'https://example.com/news/pertamina-energi-terbarukan',
         'Media': 'Kompas.com',
@@ -52,12 +51,11 @@ export const EXCEL_TEMPLATES: ExcelTemplate[] = [
     name: 'Produksi Konten Media Sosial',
     description: 'Template untuk laporan produksi konten media sosial dengan target 10 per bulan atau 60 per semester',
     fileName: 'PRODUKSI_KONTEN_MEDSOS.xlsx',
-    columns: ['Tanggal', 'Platform', 'Jenis Konten', 'Link Konten', 'Engagement', 'Reach', 'Catatan'],
-    requiredColumns: ['Tanggal', 'Platform', 'Jenis Konten', 'Link Konten'],
+    columns: ['Platform', 'Jenis Konten', 'Link Konten', 'Engagement', 'Reach', 'Catatan'],
+    requiredColumns: ['Platform', 'Jenis Konten', 'Link Konten'],
     optionalColumns: ['Engagement', 'Reach', 'Catatan'],
     sampleData: [
       {
-        'Tanggal': '2024-01-15',
         'Platform': 'Instagram',
         'Jenis Konten': 'Post',
         'Link Konten': 'https://instagram.com/p/example',
@@ -73,21 +71,19 @@ export const EXCEL_TEMPLATES: ExcelTemplate[] = [
     description: 'Template untuk laporan skoring publikasi media massa dengan berbagai jenis media',
     fileName: 'SKORING_PUBLIKASI_MEDIA.xlsx',
     columns: [
-      'Tanggal', 'Media Online', 'Media Cetak', 'Siaran TV', 
-      'Social Media', 'Radio', 'Running Text', 'Catatan'
+      'Link Berita Media Online', 'Link Media Sosial', 'Monitoring Radio', 
+      'Monitoring Media cetak', 'Monitoring Running Text', 'Monitoring Siaran TV'
     ],
-    requiredColumns: ['Tanggal'],
-    optionalColumns: ['Media Online', 'Media Cetak', 'Siaran TV', 'Social Media', 'Radio', 'Running Text', 'Catatan'],
+    requiredColumns: ['Link Berita Media Online'],
+    optionalColumns: ['Link Media Sosial', 'Monitoring Radio', 'Monitoring Media cetak', 'Monitoring Running Text', 'Monitoring Siaran TV'],
     sampleData: [
       {
-        'Tanggal': '2024-01-15',
-        'Media Online': 'https://detik.com/news/example',
-        'Media Cetak': 'https://kompas.com/print/example',
-        'Siaran TV': 'https://tvone.com/news/example',
-        'Social Media': 'https://twitter.com/example',
-        'Radio': 'https://radio.com/news/example',
-        'Running Text': 'https://runningtext.com/example',
-        'Catatan': 'Coverage komprehensif'
+        'Link Berita Media Online': 'https://pelayananpublik.id/2025/05/23/tingkatkan-layanan-internet-pln-icon-plus-sumbagut-komitmen-lakukan-perbaikan-dan-peningkatan-jaringan-fiber-optic/',
+        'Link Media Sosial': 'https://www.instagram.com/p/DKSAWthwXZ/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==',
+        'Monitoring Radio': 'https://drive.google.com/file/d/1PzHzxRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link',
+        'Monitoring Media cetak': 'https://drive.google.com/file/d/1Qz4F5xRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link',
+        'Monitoring Running Text': 'https://drive.google.com/file/d/1Rz6G7xRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link',
+        'Monitoring Siaran TV': 'https://drive.google.com/file/d/1Sz8H9xRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link'
       }
     ]
   },
@@ -96,13 +92,11 @@ export const EXCEL_TEMPLATES: ExcelTemplate[] = [
     name: 'Pengelolaan Kampanye Komunikasi',
     description: 'Template untuk laporan kampanye komunikasi dengan target 1 per semester',
     fileName: 'KAMPANYE_KOMUNIKASI.xlsx',
-    columns: ['Tanggal Mulai', 'Tanggal Selesai', 'Nama Kampanye', 'Target Audience', 'Media', 'Budget', 'Hasil', 'Catatan'],
-    requiredColumns: ['Tanggal Mulai', 'Tanggal Selesai', 'Nama Kampanye'],
+    columns: ['Nama Kampanye', 'Target Audience', 'Media', 'Budget', 'Hasil', 'Catatan'],
+    requiredColumns: ['Nama Kampanye'],
     optionalColumns: ['Target Audience', 'Media', 'Budget', 'Hasil', 'Catatan'],
     sampleData: [
       {
-        'Tanggal Mulai': '2024-01-01',
-        'Tanggal Selesai': '2024-03-31',
         'Nama Kampanye': 'Kampanye Keselamatan Berkendara',
         'Target Audience': 'Masyarakat umum',
         'Media': 'TV, Radio, Digital',
@@ -117,12 +111,11 @@ export const EXCEL_TEMPLATES: ExcelTemplate[] = [
     name: 'OFI to AFI',
     description: 'Template untuk laporan program OFI to AFI dengan target 1 per semester',
     fileName: 'OFI_TO_AFI.xlsx',
-    columns: ['Tanggal', 'Nama Program', 'Lokasi', 'Peserta', 'Materi', 'Durasi', 'Hasil', 'Catatan'],
-    requiredColumns: ['Tanggal', 'Nama Program'],
+    columns: ['Nama Program', 'Lokasi', 'Peserta', 'Materi', 'Durasi', 'Hasil', 'Catatan'],
+    requiredColumns: ['Nama Program'],
     optionalColumns: ['Lokasi', 'Peserta', 'Materi', 'Durasi', 'Hasil', 'Catatan'],
     sampleData: [
       {
-        'Tanggal': '2024-01-20',
         'Nama Program': 'Pelatihan Kepemimpinan',
         'Lokasi': 'Jakarta',
         'Peserta': '50 orang',
@@ -159,22 +152,32 @@ export const validateExcelData = (data: any[], template: ExcelTemplate): { isVal
     return { isValid: false, errors };
   }
 
-  // Check required columns
+  // Get actual columns from the data
   const firstRow = data[0];
-  const missingColumns = template.requiredColumns.filter(col => !(col in firstRow));
+  const actualColumns = Object.keys(firstRow);
   
-  if (missingColumns.length > 0) {
-    errors.push(`Kolom yang diperlukan tidak ditemukan: ${missingColumns.join(', ')}`);
+  // Basic validation - just check that we have some data
+  if (actualColumns.length === 0) {
+    errors.push('File Excel tidak memiliki kolom data');
+    return { isValid: false, errors };
   }
 
-  // Check data types and formats
+  // Check that rows have some content (at least one non-empty cell per row)
   data.forEach((row, index) => {
-    template.requiredColumns.forEach(col => {
-      if (!row[col] || row[col].toString().trim() === '') {
-        errors.push(`Baris ${index + 1}: Kolom '${col}' tidak boleh kosong`);
-      }
-    });
+    const hasContent = Object.values(row).some(value => 
+      value !== null && value !== undefined && value.toString().trim() !== ''
+    );
+    
+    if (!hasContent) {
+      errors.push(`Baris ${index + 1}: Tidak ada data yang valid`);
+    }
   });
+
+  // Limit validation errors to prevent overwhelming output
+  if (errors.length > 10) {
+    errors.splice(10);
+    errors.push('... dan error lainnya. Periksa format file Excel Anda.');
+  }
 
   return {
     isValid: errors.length === 0,

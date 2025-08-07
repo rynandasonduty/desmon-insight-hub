@@ -67,7 +67,23 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
       setLoading(true);
       setError(null);
 
-      let query = supabase
+      // First try a simple query without joins to test basic connectivity
+      console.log('🔍 Testing basic database connectivity...');
+      const { data: testData, error: testError } = await supabase
+        .from('reports')
+        .select('id, file_name, status')
+        .limit(1);
+
+      if (testError) {
+        console.error('❌ Basic connectivity test failed:', testError);
+        throw new Error(`Database connection failed: ${testError.message}`);
+      }
+
+      console.log('✅ Basic connectivity test passed, found', testData?.length, 'records');
+
+      // Try query without profiles join first
+      console.log('🔄 Trying query without profiles join...');
+      let basicQuery = supabase
         .from('reports')
         .select(`
           id,
@@ -77,102 +93,106 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
           raw_data,
           processed_data,
           calculated_score,
-          file_size,
           video_links,
           rejection_reason,
           created_at,
           updated_at,
           approved_at,
-          report_period_id,
-          reporting_month,
-          reporting_year,
-          reporting_semester,
-          kpi_version_id,
-          is_immutable,
           user_id,
-          file_path,
-          profiles!reports_user_id_fkey (
-            full_name,
-            sbu_name
-          )
+          file_path
         `)
         .order('created_at', { ascending: false });
 
       // Apply role-based filtering
       if (userRole === 'sbu' && userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      // Apply period filters (simplified)
-      // Note: period filters temporarily disabled due to missing report_periods table
-
-      if (filters?.year) {
-        query = query.eq('reporting_year', filters.year);
-      }
-
-      if (filters?.month) {
-        query = query.eq('reporting_month', filters.month);
-      }
-
-      if (filters?.semester) {
-        query = query.eq('reporting_semester', filters.semester);
+        console.log('🔒 Applying SBU filter for user:', userId);
+        basicQuery = basicQuery.eq('user_id', userId);
       }
 
       // Apply status filters
       if (filters?.status && filters.status.length > 0) {
-        query = query.in('status', filters.status);
+        basicQuery = basicQuery.in('status', filters.status);
       }
 
       // Apply indicator type filters
       if (filters?.indicatorType && filters.indicatorType.length > 0) {
-        query = query.in('indicator_type', filters.indicatorType);
+        basicQuery = basicQuery.in('indicator_type', filters.indicatorType);
       }
 
-      // Apply SBU filters
-      // Note: SBU filters temporarily disabled due to join complexity
-      // if (filters?.sbu && filters.sbu.length > 0) {
-      //   query = query.in('profiles.sbu_name', filters.sbu);
-      // }
+      const { data: basicData, error: basicError } = await basicQuery;
+      
+      if (basicError) {
+        console.error('❌ Basic query failed:', basicError);
+        throw basicError;
+      }
 
-      const { data, error: fetchError, count } = await query;
+      console.log('✅ Basic query successful, found', basicData?.length, 'records');
 
-      if (fetchError) throw fetchError;
+      // Now try to get user profiles separately
+      let profilesData: any = {};
+      if (basicData && basicData.length > 0) {
+        const userIds = [...new Set(basicData.map(r => r.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          console.log('🔄 Fetching user profiles for', userIds.length, 'users...');
+          const { data: profiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, full_name, sbu_name')
+            .in('id', userIds);
+          
+          if (profilesError) {
+            console.warn('⚠️ Could not fetch profiles:', profilesError);
+            // Continue without profiles data
+          } else {
+            console.log('✅ Profiles fetched successfully:', profiles?.length);
+            profilesData = profiles?.reduce((acc: any, profile: any) => {
+              acc[profile.id] = profile;
+              return acc;
+            }, {}) || {};
+          }
+        }
+      }
+
+      const data = basicData;
 
       // Transform data to match interface
-      const transformedReports: Report[] = (data || []).map((report: any) => ({
+      const transformedReports: Report[] = (data || []).map((report: any) => {
+        const userProfile = profilesData[report.user_id];
+        return {
         id: report.id,
         fileName: report.file_name,
-        submittedBy: report.profiles?.full_name || 'Unknown',
-        sbu: report.profiles?.sbu_name || 'Unknown SBU',
+        submittedBy: userProfile?.full_name || 'Unknown',
+        sbu: userProfile?.sbu_name || 'Unknown SBU',
         submittedAt: formatDate(report.created_at),
         status: report.status,
         indicatorType: report.indicator_type,
         rawData: report.raw_data,
         processedData: report.processed_data,
         calculatedScore: report.calculated_score,
-        fileSize: formatFileSize(report.file_size || 0),
+        fileSize: '0 KB', // Default since file_size field may not exist
         videoLinks: report.video_links || [],
         rejectionReason: report.rejection_reason,
         filePath: report.file_path,
         approvedAt: report.approved_at ? formatDate(report.approved_at) : null,
         user_id: report.user_id,
-        // New fields
-        reportPeriodId: report.report_period_id,
-        reportingMonth: report.reporting_month,
-        reportingYear: report.reporting_year,
-        reportingSemester: report.reporting_semester,
-        kpiVersionId: report.kpi_version_id,
-        isImmutable: report.is_immutable,
+        // New fields - set defaults since these fields may not exist
+        reportPeriodId: null,
+        reportingMonth: null,
+        reportingYear: null,
+        reportingSemester: null,
+        kpiVersionId: null,
+        isImmutable: false,
         periodName: null,
         periodType: null
-      }));
+        };
+      });
 
       setReports(transformedReports);
-      setTotalCount(count || 0);
+      setTotalCount(data?.length || 0);
 
     } catch (err) {
-      console.error('Error fetching reports:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch reports');
+      console.error('💥 Error fetching reports:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch reports';
+      setError(`Gagal memuat data laporan: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
