@@ -16,7 +16,6 @@ export interface Report {
   rawData: any;
   processedData: any;
   calculatedScore: number | null;
-  fileSize: string;
   videoLinks: string[];
   rejectionReason?: string;
   // New fields for period tracking
@@ -74,7 +73,6 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
           raw_data,
           processed_data,
           calculated_score,
-          file_size,
           video_links,
           rejection_reason,
           created_at,
@@ -157,7 +155,6 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
         rawData: report.raw_data,
         processedData: report.processed_data,
         calculatedScore: report.calculated_score,
-        fileSize: formatFileSize(report.file_size),
         videoLinks: report.video_links || [],
         rejectionReason: report.rejection_reason,
         approvedAt: report.approved_at ? formatDate(report.approved_at) : null,
@@ -350,15 +347,6 @@ const formatDate = (dateString: string): string => {
     hour: '2-digit',
     minute: '2-digit'
   });
-};
-
-// Helper function to format file size
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
 // Report actions with immutability checks
