@@ -19,6 +19,9 @@ export interface Report {
   fileSize: string;
   videoLinks: string[];
   rejectionReason?: string;
+  filePath?: string;
+  approvedAt?: string | null;
+  user_id?: string;
   // New fields for period tracking
   reportPeriodId?: string;
   reportingMonth?: number;
@@ -87,13 +90,10 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
           kpi_version_id,
           is_immutable,
           user_id,
+          file_path,
           profiles!reports_user_id_fkey (
             full_name,
             sbu_name
-          ),
-          report_periods!reports_report_period_id_fkey (
-            period_name,
-            period_type
           )
         `)
         .order('created_at', { ascending: false });
@@ -103,16 +103,8 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
         query = query.eq('user_id', userId);
       }
 
-      // Apply period filters
-      if (filters?.periodType) {
-        query = query.eq('report_periods.period_type', filters.periodType);
-      }
-
-      if (filters?.periodStart && filters?.periodEnd) {
-        query = query
-          .gte('report_periods.period_start', filters.periodStart)
-          .lte('report_periods.period_end', filters.periodEnd);
-      }
+      // Apply period filters (simplified)
+      // Note: period filters temporarily disabled due to missing report_periods table
 
       if (filters?.year) {
         query = query.eq('reporting_year', filters.year);
@@ -137,9 +129,10 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
       }
 
       // Apply SBU filters
-      if (filters?.sbu && filters.sbu.length > 0) {
-        query = query.in('profiles.sbu_name', filters.sbu);
-      }
+      // Note: SBU filters temporarily disabled due to join complexity
+      // if (filters?.sbu && filters.sbu.length > 0) {
+      //   query = query.in('profiles.sbu_name', filters.sbu);
+      // }
 
       const { data, error: fetchError, count } = await query;
 
@@ -157,10 +150,12 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
         rawData: report.raw_data,
         processedData: report.processed_data,
         calculatedScore: report.calculated_score,
-        fileSize: formatFileSize(report.file_size),
+        fileSize: formatFileSize(report.file_size || 0),
         videoLinks: report.video_links || [],
         rejectionReason: report.rejection_reason,
+        filePath: report.file_path,
         approvedAt: report.approved_at ? formatDate(report.approved_at) : null,
+        user_id: report.user_id,
         // New fields
         reportPeriodId: report.report_period_id,
         reportingMonth: report.reporting_month,
@@ -168,8 +163,8 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
         reportingSemester: report.reporting_semester,
         kpiVersionId: report.kpi_version_id,
         isImmutable: report.is_immutable,
-        periodName: report.report_periods?.period_name,
-        periodType: report.report_periods?.period_type
+        periodName: null,
+        periodType: null
       }));
 
       setReports(transformedReports);
@@ -362,9 +357,11 @@ const formatFileSize = (bytes: number): string => {
 };
 
 // Report actions with immutability checks
-export const useReportActions = (userRole: 'admin' | 'sbu', userId?: string) => {
+export const useReportActions = () => {
+  const [loading, setLoading] = useState(false);
   const approveReport = async (reportId: string, adminId: string, notes?: string) => {
     try {
+      setLoading(true);
       // Check if report can be modified
       const { data: report } = await supabase
         .from('reports')
@@ -395,11 +392,14 @@ export const useReportActions = (userRole: 'admin' | 'sbu', userId?: string) => 
     } catch (error) {
       console.error('Error approving report:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    } finally {
+      setLoading(false);
     }
   };
 
   const rejectReport = async (reportId: string, adminId: string, reason: string) => {
     try {
+      setLoading(true);
       // Check if report can be modified
       const { data: report } = await supabase
         .from('reports')
@@ -426,11 +426,14 @@ export const useReportActions = (userRole: 'admin' | 'sbu', userId?: string) => 
     } catch (error) {
       console.error('Error rejecting report:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    } finally {
+      setLoading(false);
     }
   };
 
   return {
     approveReport,
-    rejectReport
+    rejectReport,
+    loading
   };
 };
