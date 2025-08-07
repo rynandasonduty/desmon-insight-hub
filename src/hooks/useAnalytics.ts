@@ -210,7 +210,7 @@ export const useLeaderboard = () => {
           .map((item, index) => ({
             ...item,
             rank: index + 1,
-            change: `+${(Math.random() * 5 - 2.5).toFixed(1)}` // Mock change for now
+            change: calculateChange(item.userId, item.score) // Calculate actual change
           }));
 
         setLeaderboard(sortedLeaderboard);
@@ -430,4 +430,12 @@ export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string) =
   }, [userRole, userId]);
 
   return { compositionData, loading, error };
+};
+
+// Add function to calculate actual change from previous period
+const calculateChange = (userId: string, currentScore: number): string => {
+  // TODO: Implement actual change calculation from previous period
+  // This should query historical data and calculate the difference
+  // For now, return a placeholder
+  return '+0.0';
 };

@@ -614,10 +614,10 @@ const ApprovalDesk = () => {
         throw new Error(data.error || 'Gagal menyetujui laporan');
       }
 
-      // Update local state
+      // Update local state with actual calculated score from ETL process
       setReports(prev => prev.map(report => 
         report.id === reportId 
-          ? { ...report, status: 'approved', calculatedScore: Math.round(Math.random() * 30 + 70) }
+          ? { ...report, status: 'approved', calculatedScore: report.calculatedScore || 0 }
           : report
       ));
       
