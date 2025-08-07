@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { useKPIDefinitions } from "@/hooks/useKPIDefinitions";
 import ETLProcessor from "@/lib/etl-processor";
 import * as XLSX from 'xlsx';
-import { EXCEL_TEMPLATES, getTemplateByCode, validateExcelData, downloadTemplate } from '@/lib/excel-templates';
+import { EXCEL_TEMPLATES, getTemplateByCode, validateExcelData, downloadTemplate, readExcelFile } from '@/lib/excel-templates';
 import { createUploadNotification } from '@/hooks/useNotifications';
 
 const UploadInterface = () => {
