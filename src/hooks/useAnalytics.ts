@@ -34,7 +34,7 @@ export interface PerformanceData {
   [key: string]: number | string;
 }
 
-// Hook for analytics metrics
+// Hook for analytics metrics with real-time updates
 export const useAnalyticsMetrics = (userRole: 'admin' | 'sbu', userId?: string) => {
   const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +64,7 @@ export const useAnalyticsMetrics = (userRole: 'admin' | 'sbu', userId?: string) 
           if (profilesError) throw profilesError;
 
           const totalReports = reports?.length || 0;
-          const approvedReports = reports?.filter(r => r.status === 'approved').length || 0;
+          const approvedReports = reports?.filter(r => r.status === 'approved' || r.status === 'completed').length || 0;
           const approvalRate = totalReports > 0 ? (approvedReports / totalReports) * 100 : 0;
           
           const scoredReports = reports?.filter(r => r.calculated_score !== null) || [];
@@ -98,7 +98,7 @@ export const useAnalyticsMetrics = (userRole: 'admin' | 'sbu', userId?: string) 
           if (userReportsError) throw userReportsError;
 
           const totalReports = userReports?.length || 0;
-          const approvedReports = userReports?.filter(r => r.status === 'approved').length || 0;
+          const approvedReports = userReports?.filter(r => r.status === 'approved' || r.status === 'completed').length || 0;
           const approvalRate = totalReports > 0 ? (approvedReports / totalReports) * 100 : 0;
           
           const scoredReports = userReports?.filter(r => r.calculated_score !== null) || [];
@@ -123,23 +123,45 @@ export const useAnalyticsMetrics = (userRole: 'admin' | 'sbu', userId?: string) 
 
     fetchMetrics();
 
-    // Set up real-time subscription
-    const channel = supabase
-      .channel('analytics_metrics')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, () => {
+    // Set up real-time subscription for reports
+    const reportsChannel = supabase
+      .channel('analytics_metrics_reports')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reports'
+      }, (payload) => {
+        console.log('Real-time update: reports table changed', payload);
         fetchMetrics();
       })
       .subscribe();
 
+    // Set up real-time subscription for profiles (for active SBU count)
+    const profilesChannel = supabase
+      .channel('analytics_metrics_profiles')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'profiles',
+        filter: 'role=eq.sbu'
+      }, (payload) => {
+        console.log('Real-time update: profiles table changed', payload);
+        if (userRole === 'admin') {
+          fetchMetrics();
+        }
+      })
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(reportsChannel);
+      supabase.removeChannel(profilesChannel);
     };
   }, [userRole, userId]);
 
   return { metrics, loading, error };
 };
 
-// Hook for leaderboard data
+// Hook for leaderboard data with real-time updates
 export const useLeaderboard = () => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,7 +179,7 @@ export const useLeaderboard = () => {
           .select(`
             id,
             sbu_name,
-            reports!reports_user_id_fkey(calculated_score)
+            reports!reports_user_id_fkey(calculated_score, status)
           `)
           .eq('role', 'sbu')
           .not('sbu_name', 'is', null);
@@ -167,7 +189,9 @@ export const useLeaderboard = () => {
         // Calculate average scores for each SBU
         const sbuScores = profiles?.map(profile => {
           const reports = profile.reports || [];
-          const scoredReports = reports.filter((r: any) => r.calculated_score !== null);
+          const scoredReports = reports.filter((r: any) => 
+            r.calculated_score !== null && (r.status === 'completed' || r.status === 'approved')
+          );
           const averageScore = scoredReports.length > 0
             ? scoredReports.reduce((sum: number, r: any) => sum + r.calculated_score, 0) / scoredReports.length
             : 0;
@@ -199,12 +223,43 @@ export const useLeaderboard = () => {
     };
 
     fetchLeaderboard();
+
+    // Set up real-time subscription for reports and profiles
+    const reportsChannel = supabase
+      .channel('leaderboard_reports')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reports'
+      }, (payload) => {
+        console.log('Real-time update: reports table changed for leaderboard', payload);
+        fetchLeaderboard();
+      })
+      .subscribe();
+
+    const profilesChannel = supabase
+      .channel('leaderboard_profiles')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'profiles',
+        filter: 'role=eq.sbu'
+      }, (payload) => {
+        console.log('Real-time update: profiles table changed for leaderboard', payload);
+        fetchLeaderboard();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(reportsChannel);
+      supabase.removeChannel(profilesChannel);
+    };
   }, []);
 
   return { leaderboard, loading, error };
 };
 
-// Hook for trend data
+// Hook for trend data with real-time updates
 export const useTrendData = (userRole: 'admin' | 'sbu', userId?: string) => {
   const [trendData, setTrendData] = useState<TrendData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,9 +303,9 @@ export const useTrendData = (userRole: 'admin' | 'sbu', userId?: string) => {
           
           if (monthlyData[monthKey]) {
             monthlyData[monthKey].total++;
-            if (report.status === 'approved') {
+            if (report.status === 'approved' || report.status === 'completed') {
               monthlyData[monthKey].approved++;
-            } else if (report.status === 'rejected') {
+            } else if (report.status === 'rejected' || report.status === 'system_rejected') {
               monthlyData[monthKey].rejected++;
             }
           }
@@ -274,12 +329,29 @@ export const useTrendData = (userRole: 'admin' | 'sbu', userId?: string) => {
     };
 
     fetchTrendData();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('trend_data_reports')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reports'
+      }, (payload) => {
+        console.log('Real-time update: reports table changed for trend data', payload);
+        fetchTrendData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userRole, userId]);
 
   return { trendData, loading, error };
 };
 
-// Hook for composition data
+// Hook for composition data with real-time updates
 export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string) => {
   const [compositionData, setCompositionData] = useState<CompositionData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -338,6 +410,23 @@ export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string) =
     };
 
     fetchCompositionData();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('composition_data_reports')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reports'
+      }, (payload) => {
+        console.log('Real-time update: reports table changed for composition data', payload);
+        fetchCompositionData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userRole, userId]);
 
   return { compositionData, loading, error };

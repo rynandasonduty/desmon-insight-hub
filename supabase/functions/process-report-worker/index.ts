@@ -61,6 +61,57 @@ function findColumnMapping(headers: string[], columnConfig: any) {
   return mapping;
 }
 
+// Enhanced link validation with more comprehensive checks
+function validateLinkFormat(link: string): boolean {
+  const linkStr = link.toString().toLowerCase().trim();
+  
+  // Skip empty or invalid strings
+  if (!linkStr || linkStr.length < 5) return false;
+  
+  // Check for valid URL patterns (expanded list)
+  const validPatterns = [
+    // Cloud storage platforms
+    'sharepoint.com',
+    'drive.google.com', 
+    'dropbox.com',
+    'onedrive.live.com',
+    'box.com',
+    'icloud.com',
+    // Media platforms
+    'youtube.com',
+    'youtu.be',
+    'vimeo.com',
+    'dailymotion.com',
+    'facebook.com',
+    'instagram.com',
+    'twitter.com',
+    'tiktok.com',
+    // News platforms
+    'kompas.com',
+    'detik.com',
+    'tempo.co',
+    'tribunnews.com',
+    'liputan6.com',
+    'okezone.com',
+    'antaranews.com',
+    'cnnindonesia.com',
+    'mediaindonesia.com',
+    'suara.com'
+  ];
+  
+  // Check HTTP/HTTPS protocols
+  const hasValidProtocol = linkStr.startsWith('http://') || linkStr.startsWith('https://');
+  
+  // Check for valid domains
+  const hasValidDomain = validPatterns.some(pattern => linkStr.includes(pattern));
+  
+  // Additional validation for suspicious patterns
+  const suspiciousPatterns = ['localhost', '127.0.0.1', 'test.', 'example.', 'dummy'];
+  const hasSuspiciousPattern = suspiciousPatterns.some(pattern => linkStr.includes(pattern));
+  
+  return (hasValidProtocol || hasValidDomain) && !hasSuspiciousPattern;
+}
+
 // ETL Stage 1: Extract and Transform (System Validation)
 function extractExcelData(rawData: any) {
   console.log('📊 ETL Stage 1: Extracting Excel data...');
@@ -128,16 +179,8 @@ function transformData(extractedData: any[]) {
       row['Monitoring Siaran TV'],
     ].filter(link => link && link.toString().trim() !== '');
     
-    // Validate link formats
-    const validLinks = mediaLinks.filter(link => {
-      const linkStr = link.toString().toLowerCase();
-      return linkStr.includes('sharepoint.com') || 
-             linkStr.includes('drive.google.com') ||
-             linkStr.includes('dropbox.com') ||
-             linkStr.includes('onedrive.live.com') ||
-             linkStr.startsWith('http') ||
-             linkStr.startsWith('https');
-    });
+    // Enhanced link validation
+    const validLinks = mediaLinks.filter(link => validateLinkFormat(link.toString()));
     
     const isValid = validLinks.length > 0;
     
@@ -168,7 +211,7 @@ async function generateVideoHashes(transformedData: any[]) {
   console.log('🔐 ETL Stage 1: Generating video hashes...');
   
   const processedDataPromises = transformedData.map(async (item: any) => {
-    const allLinks = item.allMediaLinks || [];
+    const allLinks = item.validLinks || []; // Use only valid links for hashing
     
     if (allLinks.length === 0) {
       return {
@@ -178,23 +221,20 @@ async function generateVideoHashes(transformedData: any[]) {
     }
     
     try {
-      // Filter valid links first to avoid processing empty/invalid ones
-      const validLinks = allLinks
-        .filter((link: any) => link && link.toString().trim() !== '')
-        .map((link: any) => link.toString().trim());
-      
-      if (validLinks.length === 0) {
-        return {
-          ...item,
-          videoHashes: []
-        };
-      }
-      
       // Generate hashes for all valid links in parallel
-      const hashPromises = validLinks.map(async (linkStr: string) => {
+      const hashPromises = allLinks.map(async (linkStr: string) => {
         try {
+          // Normalize URL for consistent hashing
+          let normalizedUrl = linkStr.trim().toLowerCase();
+          
+          // Remove common URL parameters that don't affect content
+          normalizedUrl = normalizedUrl.replace(/[?&](utm_[^&]*|fbclid=[^&]*|gclid=[^&]*)/g, '');
+          
+          // Remove trailing slashes and fragments
+          normalizedUrl = normalizedUrl.replace(/[/#]+$/, '');
+          
           const encoder = new TextEncoder();
-          const data = encoder.encode(linkStr);
+          const data = encoder.encode(normalizedUrl);
           const hashBuffer = await crypto.subtle.digest('SHA-256', data);
           const hashArray = Array.from(new Uint8Array(hashBuffer));
           return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -231,14 +271,14 @@ async function generateVideoHashes(transformedData: any[]) {
 }
 
 async function checkDuplicates(processedData: any[], currentReportId: string) {
-  console.log('🔍 ETL Stage 1: Checking for duplicates...');
+  console.log('🔍 ETL Stage 1: Checking for duplicates with expanded scope...');
   
   // Collect all hashes from processed data and create a Set for efficient lookups
   const currentHashes = new Set<string>();
   processedData.forEach(item => {
     if (item.videoHashes && Array.isArray(item.videoHashes)) {
       item.videoHashes.forEach((hash: string) => {
-        if (hash && hash.trim() !== '') {
+        if (hash && hash.trim() !== '' && !hash.startsWith('fallback_')) {
           currentHashes.add(hash.trim());
         }
       });
@@ -246,44 +286,65 @@ async function checkDuplicates(processedData: any[], currentReportId: string) {
   });
   
   if (currentHashes.size === 0) {
-    console.log('ℹ️ No hashes to check for duplicates');
+    console.log('ℹ️ No valid hashes to check for duplicates');
     return { hasDuplicates: false, duplicates: [] };
   }
   
   console.log(`🔍 Checking ${currentHashes.size} unique hashes for duplicates`);
   
   try {
-    // Query existing reports with video hashes, but limit the scope
-    // Only check recent reports (last 6 months) to improve performance
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    // Expanded duplicate detection strategy:
+    // 1. Check recent reports (last 12 months) with higher limit
+    // 2. If needed, check older reports in batches
     
-    const { data: existingReports, error } = await supabase
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    
+    // First pass: Check recent reports (more comprehensive)
+    const { data: recentReports, error: recentError } = await supabase
       .from('reports')
       .select('id, file_name, video_hashes, created_at')
       .neq('id', currentReportId)
       .not('video_hashes', 'is', null)
-      .gte('created_at', sixMonthsAgo.toISOString())
+      .gte('created_at', oneYearAgo.toISOString())
       .order('created_at', { ascending: false })
-      .limit(1000); // Reasonable limit to prevent memory issues
+      .limit(2000); // Increased limit for recent reports
     
-    if (error) {
-      console.error('❌ ETL Stage 1: Error checking duplicates:', error);
-      throw new Error(`Failed to check duplicates: ${error.message}`);
+    if (recentError) {
+      console.error('❌ ETL Stage 1: Error checking recent duplicates:', recentError);
+      throw new Error(`Failed to check recent duplicates: ${recentError.message}`);
     }
     
-    if (!existingReports || existingReports.length === 0) {
+    let allReports = recentReports || [];
+    
+    // Second pass: If no recent duplicates found, check older reports
+    if (allReports.length > 0) {
+      const { data: olderReports, error: olderError } = await supabase
+        .from('reports')
+        .select('id, file_name, video_hashes, created_at')
+        .neq('id', currentReportId)
+        .not('video_hashes', 'is', null)
+        .lt('created_at', oneYearAgo.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1500); // Check older reports too
+      
+      if (!olderError && olderReports) {
+        allReports = [...allReports, ...olderReports];
+      }
+    }
+    
+    if (allReports.length === 0) {
       console.log('ℹ️ No existing reports with hashes found');
       return { hasDuplicates: false, duplicates: [] };
     }
     
-    console.log(`🔍 Comparing against ${existingReports.length} existing reports`);
+    console.log(`🔍 Comparing against ${allReports.length} existing reports`);
     
     const duplicates: any[] = [];
     const currentHashArray = Array.from(currentHashes);
     
-    // Use more efficient duplicate detection
-    for (const report of existingReports) {
+    // Use more efficient duplicate detection with better scoring
+    for (const report of allReports) {
       const existingHashes = report.video_hashes;
       
       if (!existingHashes || !Array.isArray(existingHashes) || existingHashes.length === 0) {
@@ -291,43 +352,78 @@ async function checkDuplicates(processedData: any[], currentReportId: string) {
       }
       
       // Convert to Set for O(1) lookups instead of O(n) array includes
-      const existingHashSet = new Set(existingHashes.map((h: string) => h.trim()));
+      const existingHashSet = new Set(
+        existingHashes
+          .map((h: string) => h.trim())
+          .filter((h: string) => h && !h.startsWith('fallback_'))
+      );
       
       // Find intersection of hash sets
       const commonHashes = currentHashArray.filter(hash => existingHashSet.has(hash));
       
       if (commonHashes.length > 0) {
+        // Calculate duplicate severity
+        const duplicatePercentage = (commonHashes.length / Math.min(currentHashArray.length, existingHashSet.size)) * 100;
+        const severity = duplicatePercentage >= 50 ? 'high' : duplicatePercentage >= 25 ? 'medium' : 'low';
+        
         duplicates.push({
           reportId: report.id,
           fileName: report.file_name,
           createdAt: report.created_at,
           duplicateHashes: commonHashes,
-          duplicateCount: commonHashes.length
+          duplicateCount: commonHashes.length,
+          duplicatePercentage: duplicatePercentage,
+          severity: severity
         });
         
-        // Early exit if we find too many duplicates (potential spam detection)
-        if (duplicates.length >= 10) {
+        // Early exit if we find high-severity duplicates
+        if (severity === 'high' && duplicates.length >= 5) {
+          console.warn('⚠️ Found high-severity duplicates, stopping search');
+          break;
+        }
+        
+        // Limit total duplicates checked to prevent performance issues
+        if (duplicates.length >= 15) {
           console.warn('⚠️ Found excessive duplicates, stopping search');
           break;
         }
       }
     }
     
-    // Sort duplicates by most recent first and most duplicates first
+    // Sort duplicates by severity and recency
     duplicates.sort((a, b) => {
+      // First by severity
+      const severityOrder = { high: 3, medium: 2, low: 1 };
+      if (severityOrder[a.severity] !== severityOrder[b.severity]) {
+        return severityOrder[b.severity] - severityOrder[a.severity];
+      }
+      // Then by duplicate count
       if (a.duplicateCount !== b.duplicateCount) {
         return b.duplicateCount - a.duplicateCount;
       }
+      // Finally by recency
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
     
     console.log(`🔍 Found ${duplicates.length} reports with duplicate content`);
+    if (duplicates.length > 0) {
+      console.log(`📊 Duplicate severity breakdown:`, 
+        duplicates.reduce((acc, d) => {
+          acc[d.severity] = (acc[d.severity] || 0) + 1;
+          return acc;
+        }, {})
+      );
+    }
+    
+    // Only flag as duplicates if we have high-severity matches
+    const hasSignificantDuplicates = duplicates.some(d => d.severity === 'high');
     
     return {
-      hasDuplicates: duplicates.length > 0,
-      duplicates: duplicates.slice(0, 5), // Limit to top 5 most relevant duplicates
-      totalCheckedReports: existingReports.length,
-      totalCurrentHashes: currentHashes.size
+      hasDuplicates: hasSignificantDuplicates,
+      duplicates: duplicates.slice(0, 8), // Return top 8 most relevant duplicates
+      totalCheckedReports: allReports.length,
+      totalCurrentHashes: currentHashes.size,
+      searchScope: 'expanded'
     };
     
   } catch (error: any) {
