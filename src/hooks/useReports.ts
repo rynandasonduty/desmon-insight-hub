@@ -1,3 +1,7 @@
+/**
+ * Enhanced Reports Hook with Period-based Filtering and Data Immutability
+ */
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -9,21 +13,51 @@ export interface Report {
   submittedAt: string;
   status: string;
   indicatorType: string;
-  calculatedScore: number | null;
-  approvedBy: string | null;
-  approvedAt: string | null;
-  rejectionReason: string | null;
-  filePath: string | null;
-  processedData: any;
   rawData: any;
-  videoLinks: any;
-  videoHashes: string[] | null;
+  processedData: any;
+  calculatedScore: number | null;
+  fileSize: string;
+  videoLinks: string[];
+  rejectionReason?: string;
+  // New fields for period tracking
+  reportPeriodId?: string;
+  reportingMonth?: number;
+  reportingYear?: number;
+  reportingSemester?: number;
+  kpiVersionId?: string;
+  isImmutable?: boolean;
+  // Period information
+  periodName?: string;
+  periodType?: string;
 }
 
-export const useReports = (userRole: 'admin' | 'sbu', userId?: string, currentSBU?: string) => {
+export interface ReportFilter {
+  periodType?: 'monthly' | 'semester' | 'yearly';
+  periodStart?: string;
+  periodEnd?: string;
+  status?: string[];
+  indicatorType?: string[];
+  sbu?: string[];
+  year?: number;
+  month?: number;
+  semester?: number;
+}
+
+export interface ReportPeriod {
+  id: string;
+  periodType: 'monthly' | 'semester' | 'yearly';
+  periodStart: string;
+  periodEnd: string;
+  periodName: string;
+  isActive: boolean;
+}
+
+export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?: ReportFilter) => {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [periods, setPeriods] = useState<ReportPeriod[]>([]);
 
   const fetchReports = async () => {
     try {
@@ -37,51 +71,110 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, currentSB
           file_name,
           status,
           indicator_type,
+          raw_data,
+          processed_data,
           calculated_score,
+          file_size,
+          video_links,
+          rejection_reason,
           created_at,
           updated_at,
           approved_at,
-          rejection_reason,
-          file_path,
-          processed_data,
-          raw_data,
-          video_links,
-          video_hashes,
-          user_profile:profiles!reports_user_id_fkey(full_name, sbu_name),
-          approved_by_profile:profiles!reports_approved_by_fkey(full_name)
+          report_period_id,
+          reporting_month,
+          reporting_year,
+          reporting_semester,
+          kpi_version_id,
+          is_immutable,
+          user_id,
+          profiles!reports_user_id_fkey (
+            full_name,
+            sbu_name
+          ),
+          report_periods!reports_report_period_id_fkey (
+            period_name,
+            period_type
+          )
         `)
         .order('created_at', { ascending: false });
 
-      // Filter by user role
+      // Apply role-based filtering
       if (userRole === 'sbu' && userId) {
         query = query.eq('user_id', userId);
       }
 
-      const { data, error: fetchError } = await query;
+      // Apply period filters
+      if (filters?.periodType) {
+        query = query.eq('report_periods.period_type', filters.periodType);
+      }
+
+      if (filters?.periodStart && filters?.periodEnd) {
+        query = query
+          .gte('report_periods.period_start', filters.periodStart)
+          .lte('report_periods.period_end', filters.periodEnd);
+      }
+
+      if (filters?.year) {
+        query = query.eq('reporting_year', filters.year);
+      }
+
+      if (filters?.month) {
+        query = query.eq('reporting_month', filters.month);
+      }
+
+      if (filters?.semester) {
+        query = query.eq('reporting_semester', filters.semester);
+      }
+
+      // Apply status filters
+      if (filters?.status && filters.status.length > 0) {
+        query = query.in('status', filters.status);
+      }
+
+      // Apply indicator type filters
+      if (filters?.indicatorType && filters.indicatorType.length > 0) {
+        query = query.in('indicator_type', filters.indicatorType);
+      }
+
+      // Apply SBU filters
+      if (filters?.sbu && filters.sbu.length > 0) {
+        query = query.in('profiles.sbu_name', filters.sbu);
+      }
+
+      const { data, error: fetchError, count } = await query;
 
       if (fetchError) throw fetchError;
 
-      // Transform data to match expected interface
-      const transformedReports: Report[] = data?.map(report => ({
+      // Transform data to match interface
+      const transformedReports: Report[] = (data || []).map((report: any) => ({
         id: report.id,
         fileName: report.file_name,
-        submittedBy: report.user_profile?.full_name || 'Unknown User',
-        sbu: report.user_profile?.sbu_name || currentSBU || 'Unknown SBU',
+        submittedBy: report.profiles?.full_name || 'Unknown',
+        sbu: report.profiles?.sbu_name || 'Unknown SBU',
         submittedAt: formatDate(report.created_at),
         status: report.status,
-        indicatorType: report.indicator_type || 'Unknown',
-        calculatedScore: report.calculated_score,
-        approvedBy: report.approved_by_profile?.full_name || null,
-        approvedAt: report.approved_at ? formatDate(report.approved_at) : null,
-        rejectionReason: report.rejection_reason,
-        filePath: report.file_path,
-        processedData: report.processed_data,
+        indicatorType: report.indicator_type,
         rawData: report.raw_data,
-        videoLinks: report.video_links,
-        videoHashes: report.video_hashes
-      })) || [];
+        processedData: report.processed_data,
+        calculatedScore: report.calculated_score,
+        fileSize: formatFileSize(report.file_size),
+        videoLinks: report.video_links || [],
+        rejectionReason: report.rejection_reason,
+        approvedAt: report.approved_at ? formatDate(report.approved_at) : null,
+        // New fields
+        reportPeriodId: report.report_period_id,
+        reportingMonth: report.reporting_month,
+        reportingYear: report.reporting_year,
+        reportingSemester: report.reporting_semester,
+        kpiVersionId: report.kpi_version_id,
+        isImmutable: report.is_immutable,
+        periodName: report.report_periods?.period_name,
+        periodType: report.report_periods?.period_type
+      }));
 
       setReports(transformedReports);
+      setTotalCount(count || 0);
+
     } catch (err) {
       console.error('Error fetching reports:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch reports');
@@ -90,13 +183,138 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, currentSB
     }
   };
 
+  const fetchPeriods = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('report_periods')
+        .select('*')
+        .eq('is_active', true)
+        .order('period_start', { ascending: false });
+
+      if (error) throw error;
+      setPeriods(data || []);
+    } catch (err) {
+      console.error('Error fetching periods:', err);
+    }
+  };
+
+  // Check if report can be modified
+  const canModifyReport = (report: Report): boolean => {
+    if (userRole === 'admin') {
+      return !report.isImmutable && report.status !== 'approved' && report.status !== 'completed';
+    }
+    return !report.isImmutable && report.status === 'pending_approval' && report.user_id === userId;
+  };
+
+  // Get reports by period
+  const getReportsByPeriod = async (periodType: 'monthly' | 'semester' | 'yearly', periodName: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select(`
+          *,
+          profiles!reports_user_id_fkey (full_name, sbu_name),
+          report_periods!reports_report_period_id_fkey (period_name, period_type)
+        `)
+        .eq('report_periods.period_type', periodType)
+        .eq('report_periods.period_name', periodName);
+
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error('Error fetching reports by period:', err);
+      return [];
+    }
+  };
+
+  // Get period statistics
+  const getPeriodStats = async (periodType: 'monthly' | 'semester' | 'yearly', periodName: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('analytics_summary')
+        .select('*')
+        .eq('period_type', periodType)
+        .eq('period_name', periodName)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error('Error fetching period stats:', err);
+      return null;
+    }
+  };
+
+  // Get available years
+  const getAvailableYears = async (): Promise<number[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('reporting_year')
+        .not('reporting_year', 'is', null);
+
+      if (error) throw error;
+      
+      const years = [...new Set(data?.map(r => r.reporting_year))].sort((a, b) => b - a);
+      return years;
+    } catch (err) {
+      console.error('Error fetching available years:', err);
+      return [];
+    }
+  };
+
+  // Get available SBUs
+  const getAvailableSBUs = async (): Promise<string[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('sbu_name')
+        .eq('role', 'sbu')
+        .not('sbu_name', 'is', null);
+
+      if (error) throw error;
+      
+      const sbus = [...new Set(data?.map(p => p.sbu_name))].sort();
+      return sbus;
+    } catch (err) {
+      console.error('Error fetching available SBUs:', err);
+      return [];
+    }
+  };
+
+  // Get available indicator types
+  const getAvailableIndicatorTypes = async (): Promise<string[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('indicator_type')
+        .not('indicator_type', 'is', null);
+
+      if (error) throw error;
+      
+      const types = [...new Set(data?.map(r => r.indicator_type))].sort();
+      return types;
+    } catch (err) {
+      console.error('Error fetching available indicator types:', err);
+      return [];
+    }
+  };
+
   useEffect(() => {
     fetchReports();
+    fetchPeriods();
+  }, [userRole, userId, filters]);
 
-    // Set up real-time subscription
+  // Real-time subscription
+  useEffect(() => {
     const channel = supabase
       .channel('reports_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, () => {
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reports'
+      }, (payload) => {
+        console.log('Real-time update: reports table changed', payload);
         fetchReports();
       })
       .subscribe();
@@ -104,9 +322,22 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, currentSB
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userRole, userId, currentSBU]);
+  }, [userRole, userId, filters]);
 
-  return { reports, loading, error, refetch: fetchReports };
+  return {
+    reports,
+    loading,
+    error,
+    totalCount,
+    periods,
+    canModifyReport,
+    getReportsByPeriod,
+    getPeriodStats,
+    getAvailableYears,
+    getAvailableSBUs,
+    getAvailableIndicatorTypes,
+    refetch: fetchReports
+  };
 };
 
 // Helper function to format dates
@@ -121,94 +352,85 @@ const formatDate = (dateString: string): string => {
   });
 };
 
-// Hook for report actions (approve/reject)
-export const useReportActions = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+// Helper function to format file size
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
+// Report actions with immutability checks
+export const useReportActions = (userRole: 'admin' | 'sbu', userId?: string) => {
   const approveReport = async (reportId: string, adminId: string, notes?: string) => {
     try {
-      setLoading(true);
-      setError(null);
+      // Check if report can be modified
+      const { data: report } = await supabase
+        .from('reports')
+        .select('is_immutable, status')
+        .eq('id', reportId)
+        .single();
+
+      if (report?.is_immutable) {
+        throw new Error('Report cannot be modified as it is immutable');
+      }
+
+      if (report?.status === 'approved' || report?.status === 'completed') {
+        throw new Error('Report is already approved or completed');
+      }
 
       const { error: updateError } = await supabase
         .from('reports')
         .update({
           status: 'approved',
           approved_by: adminId,
-          approved_at: new Date().toISOString()
+          approved_at: new Date().toISOString(),
+          notes: notes
         })
         .eq('id', reportId);
 
       if (updateError) throw updateError;
-
-      // Call admin-report-action edge function
-      const { error: functionError } = await supabase.functions.invoke('admin-report-action', {
-        body: {
-          reportId,
-          action: 'approve',
-          notes
-        }
-      });
-
-      if (functionError) {
-        console.warn('Edge function error (non-critical):', functionError);
-      }
-
       return { success: true };
-    } catch (err) {
-      console.error('Error approving report:', err);
-      setError(err instanceof Error ? err.message : 'Failed to approve report');
-      return { success: false, error: err instanceof Error ? err.message : 'Failed to approve report' };
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Error approving report:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   };
 
   const rejectReport = async (reportId: string, adminId: string, reason: string) => {
     try {
-      setLoading(true);
-      setError(null);
+      // Check if report can be modified
+      const { data: report } = await supabase
+        .from('reports')
+        .select('is_immutable, status')
+        .eq('id', reportId)
+        .single();
+
+      if (report?.is_immutable) {
+        throw new Error('Report cannot be modified as it is immutable');
+      }
 
       const { error: updateError } = await supabase
         .from('reports')
         .update({
           status: 'rejected',
-          approved_by: adminId,
-          rejection_reason: reason,
-          approved_at: new Date().toISOString()
+          rejected_by: adminId,
+          rejected_at: new Date().toISOString(),
+          rejection_reason: reason
         })
         .eq('id', reportId);
 
       if (updateError) throw updateError;
-
-      // Call admin-report-action edge function
-      const { error: functionError } = await supabase.functions.invoke('admin-report-action', {
-        body: {
-          reportId,
-          action: 'reject',
-          reason
-        }
-      });
-
-      if (functionError) {
-        console.warn('Edge function error (non-critical):', functionError);
-      }
-
       return { success: true };
-    } catch (err) {
-      console.error('Error rejecting report:', err);
-      setError(err instanceof Error ? err.message : 'Failed to reject report');
-      return { success: false, error: err instanceof Error ? err.message : 'Failed to reject report' };
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Error rejecting report:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   };
 
   return {
     approveReport,
-    rejectReport,
-    loading,
-    error
+    rejectReport
   };
 };

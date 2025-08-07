@@ -75,34 +75,24 @@ export const useSettings = (userId?: string) => {
     try {
       setLoading(true);
       setError(null);
-
-      // Try to fetch from a hypothetical settings table
-      // Since the table doesn't exist yet, we'll create it on-the-fly
-      // or use localStorage as fallback
-      
-      const settingsKey = userId ? `user_settings_${userId}` : 'app_settings';
-      
-      // First try to get from localStorage as fallback
-      const localSettings = localStorage.getItem(settingsKey);
-      if (localSettings) {
-        try {
-          const parsed = JSON.parse(localSettings);
-          setSettings({ ...defaultSettings, ...parsed });
-        } catch (e) {
-          console.warn('Failed to parse local settings:', e);
+      // Try to fetch from Supabase
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('settings')
+        .eq(userId ? 'user_id' : 'is_global', userId || true)
+        .single();
+      if (data && data.settings) {
+        setSettings({ ...defaultSettings, ...data.settings });
+      } else if (error) {
+        // fallback to localStorage
+        const settingsKey = userId ? `user_settings_${userId}` : 'app_settings';
+        const local = localStorage.getItem(settingsKey);
+        if (local) {
+          setSettings({ ...defaultSettings, ...JSON.parse(local) });
+        } else {
           setSettings(defaultSettings);
         }
-      } else {
-        setSettings(defaultSettings);
       }
-
-      // TODO: When settings table is created, replace with:
-      // const { data, error } = await supabase
-      //   .from('app_settings')
-      //   .select('*')
-      //   .eq(userId ? 'user_id' : 'is_global', userId || true)
-      //   .single();
-
     } catch (err) {
       console.error('Error fetching settings:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch settings');
@@ -116,25 +106,21 @@ export const useSettings = (userId?: string) => {
     try {
       setSaving(true);
       setError(null);
-
       const updatedSettings = { ...settings, ...newSettings };
-      
-      // Save to localStorage as fallback
+      // Save to Supabase
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          user_id: userId,
+          is_global: !userId,
+          settings: updatedSettings,
+          updated_at: new Date().toISOString()
+        });
+      if (error) throw error;
+      setSettings(updatedSettings);
+      // Also save to localStorage as backup
       const settingsKey = userId ? `user_settings_${userId}` : 'app_settings';
       localStorage.setItem(settingsKey, JSON.stringify(updatedSettings));
-      
-      setSettings(updatedSettings);
-
-      // TODO: When settings table is created, replace with:
-      // const { error } = await supabase
-      //   .from('app_settings')
-      //   .upsert({
-      //     user_id: userId,
-      //     is_global: !userId,
-      //     settings: updatedSettings,
-      //     updated_at: new Date().toISOString()
-      //   });
-
       return { success: true };
     } catch (err) {
       console.error('Error saving settings:', err);

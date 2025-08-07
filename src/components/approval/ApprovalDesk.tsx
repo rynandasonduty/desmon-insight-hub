@@ -28,6 +28,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { createApprovalNotification } from '@/hooks/useNotifications';
 
 // Report interface
 interface Report {
@@ -614,12 +615,18 @@ const ApprovalDesk = () => {
         throw new Error(data.error || 'Gagal menyetujui laporan');
       }
 
-      // Update local state
+      // Update local state with actual calculated score from ETL process
       setReports(prev => prev.map(report => 
         report.id === reportId 
-          ? { ...report, status: 'approved', calculatedScore: Math.round(Math.random() * 30 + 70) }
+          ? { ...report, status: 'approved', calculatedScore: report.calculatedScore || 0 }
           : report
       ));
+      
+      // Create notification for the report submitter
+      const report = reports.find(r => r.id === reportId);
+      if (report && report.user_id) {
+        await createApprovalNotification(report.user_id, report.fileName, 'approved', note);
+      }
       
       if (!bulkAction) { // Only show individual toast if not part of bulk action
         toast({
@@ -675,6 +682,12 @@ const ApprovalDesk = () => {
           ? { ...report, status: 'rejected', rejectionReason: reason }
           : report
       ));
+      
+      // Create notification for the report submitter
+      const report = reports.find(r => r.id === reportId);
+      if (report && report.user_id) {
+        await createApprovalNotification(report.user_id, report.fileName, 'rejected', reason);
+      }
       
       if (!bulkAction) { // Only show individual toast if not part of bulk action
         toast({

@@ -34,7 +34,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
   const location = useLocation();
   
   // Get notification count from Supabase
-  const { notificationCount } = useNotifications(userId || undefined);
+  const { unreadCount } = useNotifications(userId || undefined);
 
   // Get current user ID from Supabase auth
   useEffect(() => {
@@ -92,7 +92,7 @@ const MainApp = ({ userRole = 'admin', userName = 'Admin Central', currentSBU, o
       <Header 
         userRole={userRole}
         userName={userName}
-        notificationCount={notificationCount}
+        notificationCount={unreadCount}
         onMenuToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         onSignOut={handleSignOut}
         onNotificationClick={handleNotificationClick}

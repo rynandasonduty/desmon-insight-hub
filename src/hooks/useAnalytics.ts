@@ -1,3 +1,7 @@
+/**
+ * Enhanced Analytics Hook with Period-based Analytics and Real Data Visualization
+ */
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -6,6 +10,11 @@ export interface AnalyticsMetrics {
   approvalRate: number;
   averageScore: number;
   activeSBU: number;
+  // New period-based metrics
+  periodType?: 'monthly' | 'semester' | 'yearly';
+  periodName?: string;
+  periodStart?: string;
+  periodEnd?: string;
 }
 
 export interface LeaderboardItem {
@@ -14,6 +23,11 @@ export interface LeaderboardItem {
   score: number;
   change: string;
   userId?: string;
+  // New period-based fields
+  periodType?: string;
+  periodName?: string;
+  previousScore?: number;
+  improvement?: number;
 }
 
 export interface TrendData {
@@ -21,21 +35,43 @@ export interface TrendData {
   total_laporan: number;
   approved: number;
   rejected: number;
+  // Enhanced trend data
+  averageScore?: number;
+  activeSBU?: number;
+  periodType?: string;
+  periodName?: string;
 }
 
 export interface CompositionData {
   name: string;
   value: number;
   color: string;
+  // Enhanced composition data
+  percentage?: number;
+  trend?: 'up' | 'down' | 'stable';
 }
 
 export interface PerformanceData {
   indicator: string;
   [key: string]: number | string;
+  // Enhanced performance data
+  target?: number;
+  achievement?: number;
+  percentage?: number;
+  score?: number;
 }
 
-// Hook for analytics metrics with real-time updates
-export const useAnalyticsMetrics = (userRole: 'admin' | 'sbu', userId?: string) => {
+export interface AnalyticsFilter {
+  periodType?: 'monthly' | 'semester' | 'yearly';
+  periodName?: string;
+  year?: number;
+  month?: number;
+  semester?: number;
+  sbu?: string[];
+}
+
+// Hook for analytics metrics with period-based filtering
+export const useAnalyticsMetrics = (userRole: 'admin' | 'sbu', userId?: string, filters?: AnalyticsFilter) => {
   const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,73 +82,71 @@ export const useAnalyticsMetrics = (userRole: 'admin' | 'sbu', userId?: string) 
         setLoading(true);
         setError(null);
 
-        if (userRole === 'admin') {
-          // Admin: get all reports metrics
+        let query = supabase
+          .from('analytics_summary')
+          .select('*');
+
+        // Apply period filters
+        if (filters?.periodType) {
+          query = query.eq('period_type', filters.periodType);
+        }
+
+        if (filters?.periodName) {
+          query = query.eq('period_name', filters.periodName);
+        }
+
+        if (filters?.year) {
+          query = query.eq('period_start', `${filters.year}-01-01`);
+        }
+
+        // Get the most recent period if no specific filter
+        if (!filters?.periodName && !filters?.year) {
+          query = query.order('period_start', { ascending: false }).limit(1);
+        } else {
+          query = query.order('period_start', { ascending: false });
+        }
+
+        const { data, error: fetchError } = await query;
+
+        if (fetchError) throw fetchError;
+
+        if (data && data.length > 0) {
+          const summary = data[0];
+          const totalReports = summary.total_reports || 0;
+          const approvedReports = summary.approved_reports || 0;
+          const rejectedReports = summary.rejected_reports || 0;
+
+          setMetrics({
+            totalReports,
+            approvalRate: totalReports > 0 ? (approvedReports / totalReports) * 100 : 0,
+            averageScore: summary.average_score || 0,
+            activeSBU: summary.active_sbu_count || 0,
+            periodType: summary.period_type,
+            periodName: summary.period_name,
+            periodStart: summary.period_start,
+            periodEnd: summary.period_end
+          });
+        } else {
+          // Fallback to real-time calculation if no summary data
           const { data: reports, error: reportsError } = await supabase
             .from('reports')
             .select('status, calculated_score, user_id');
 
           if (reportsError) throw reportsError;
 
-          // Count active SBUs
-          const { data: profiles, error: profilesError } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('role', 'sbu')
-            .not('sbu_name', 'is', null);
-
-          if (profilesError) throw profilesError;
-
           const totalReports = reports?.length || 0;
           const approvedReports = reports?.filter(r => r.status === 'approved' || r.status === 'completed').length || 0;
-          const approvalRate = totalReports > 0 ? (approvedReports / totalReports) * 100 : 0;
-          
-          const scoredReports = reports?.filter(r => r.calculated_score !== null) || [];
-          const averageScore = scoredReports.length > 0 
-            ? scoredReports.reduce((sum, r) => sum + (r.calculated_score || 0), 0) / scoredReports.length
-            : 0;
+          const uniqueSBUs = new Set(reports?.map(r => r.user_id)).size;
+          const averageScore = reports?.reduce((sum, r) => sum + (r.calculated_score || 0), 0) / (reports?.length || 1);
 
           setMetrics({
             totalReports,
-            approvalRate: Math.round(approvalRate * 10) / 10,
-            averageScore: Math.round(averageScore * 10) / 10,
-            activeSBU: profiles?.length || 0
-          });
-        } else {
-          // SBU: get user-specific metrics
-          if (!userId) {
-            setMetrics({
-              totalReports: 0,
-              approvalRate: 0,
-              averageScore: 0,
-              activeSBU: 1
-            });
-            return;
-          }
-
-          const { data: userReports, error: userReportsError } = await supabase
-            .from('reports')
-            .select('status, calculated_score')
-            .eq('user_id', userId);
-
-          if (userReportsError) throw userReportsError;
-
-          const totalReports = userReports?.length || 0;
-          const approvedReports = userReports?.filter(r => r.status === 'approved' || r.status === 'completed').length || 0;
-          const approvalRate = totalReports > 0 ? (approvedReports / totalReports) * 100 : 0;
-          
-          const scoredReports = userReports?.filter(r => r.calculated_score !== null) || [];
-          const averageScore = scoredReports.length > 0 
-            ? scoredReports.reduce((sum, r) => sum + (r.calculated_score || 0), 0) / scoredReports.length
-            : 0;
-
-          setMetrics({
-            totalReports,
-            approvalRate: Math.round(approvalRate * 10) / 10,
-            averageScore: Math.round(averageScore * 10) / 10,
-            activeSBU: 1
+            approvalRate: totalReports > 0 ? (approvedReports / totalReports) * 100 : 0,
+            averageScore,
+            activeSBU: uniqueSBUs
           });
         }
+
       } catch (err) {
         console.error('Error fetching analytics metrics:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch metrics');
@@ -123,46 +157,29 @@ export const useAnalyticsMetrics = (userRole: 'admin' | 'sbu', userId?: string) 
 
     fetchMetrics();
 
-    // Set up real-time subscription for reports
-    const reportsChannel = supabase
-      .channel('analytics_metrics_reports')
+    // Real-time subscription for analytics summary
+    const channel = supabase
+      .channel('analytics_metrics')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
-        table: 'reports'
+        table: 'analytics_summary'
       }, (payload) => {
-        console.log('Real-time update: reports table changed', payload);
+        console.log('Real-time update: analytics_summary table changed', payload);
         fetchMetrics();
       })
       .subscribe();
 
-    // Set up real-time subscription for profiles (for active SBU count)
-    const profilesChannel = supabase
-      .channel('analytics_metrics_profiles')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'profiles',
-        filter: 'role=eq.sbu'
-      }, (payload) => {
-        console.log('Real-time update: profiles table changed', payload);
-        if (userRole === 'admin') {
-          fetchMetrics();
-        }
-      })
-      .subscribe();
-
     return () => {
-      supabase.removeChannel(reportsChannel);
-      supabase.removeChannel(profilesChannel);
+      supabase.removeChannel(channel);
     };
-  }, [userRole, userId]);
+  }, [userRole, userId, filters]);
 
   return { metrics, loading, error };
 };
 
-// Hook for leaderboard data with real-time updates
-export const useLeaderboard = () => {
+// Enhanced leaderboard with period-based data and real change calculation
+export const useLeaderboard = (filters?: AnalyticsFilter) => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,47 +190,76 @@ export const useLeaderboard = () => {
         setLoading(true);
         setError(null);
 
-        // Get all SBU users with their average scores
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
+        // Get current period leaderboard
+        let query = supabase
+          .from('leaderboard_history')
           .select(`
-            id,
+            user_id,
             sbu_name,
-            reports!reports_user_id_fkey(calculated_score, status)
+            score,
+            period_type,
+            period_name,
+            period_start,
+            period_end,
+            profiles!leaderboard_history_user_id_fkey (full_name)
           `)
-          .eq('role', 'sbu')
-          .not('sbu_name', 'is', null);
+          .order('score', { ascending: false });
 
-        if (profilesError) throw profilesError;
+        // Apply period filters
+        if (filters?.periodType) {
+          query = query.eq('period_type', filters.periodType);
+        }
 
-        // Calculate average scores for each SBU
-        const sbuScores = profiles?.map(profile => {
-          const reports = profile.reports || [];
-          const scoredReports = reports.filter((r: any) => 
-            r.calculated_score !== null && (r.status === 'completed' || r.status === 'approved')
-          );
-          const averageScore = scoredReports.length > 0
-            ? scoredReports.reduce((sum: number, r: any) => sum + r.calculated_score, 0) / scoredReports.length
-            : 0;
+        if (filters?.periodName) {
+          query = query.eq('period_name', filters.periodName);
+        }
 
-          return {
-            sbu: profile.sbu_name || 'Unknown SBU',
-            score: Math.round(averageScore * 10) / 10,
-            userId: profile.id,
-            change: '+0.0' // TODO: Calculate actual change from previous period
-          };
-        }) || [];
+        const { data: currentData, error: currentError } = await query;
 
-        // Sort by score and add ranks
-        const sortedLeaderboard = sbuScores
-          .sort((a, b) => b.score - a.score)
-          .map((item, index) => ({
-            ...item,
+        if (currentError) throw currentError;
+
+        // Get previous period for change calculation
+        const previousPeriodQuery = supabase
+          .from('leaderboard_history')
+          .select('user_id, score, period_name')
+          .order('period_end', { ascending: false })
+          .limit(100);
+
+        if (filters?.periodType) {
+          previousPeriodQuery.eq('period_type', filters.periodType);
+        }
+
+        const { data: previousData, error: previousError } = await previousPeriodQuery;
+
+        if (previousError) throw previousError;
+
+        // Calculate leaderboard with real changes
+        const leaderboardMap = new Map();
+        
+        // Process current data
+        currentData?.forEach((item, index) => {
+          const previousScore = previousData?.find(p => p.user_id === item.user_id && p.period_name !== item.period_name)?.score || 0;
+          const change = item.score - previousScore;
+          
+          leaderboardMap.set(item.user_id, {
             rank: index + 1,
-            change: `+${(Math.random() * 5 - 2.5).toFixed(1)}` // Mock change for now
-          }));
+            sbu: item.sbu_name || 'Unknown SBU',
+            score: item.score,
+            change: `${change >= 0 ? '+' : ''}${change.toFixed(1)}`,
+            userId: item.user_id,
+            periodType: item.period_type,
+            periodName: item.period_name,
+            previousScore,
+            improvement: change
+          });
+        });
+
+        const sortedLeaderboard = Array.from(leaderboardMap.values())
+          .sort((a, b) => b.score - a.score)
+          .map((item, index) => ({ ...item, rank: index + 1 }));
 
         setLeaderboard(sortedLeaderboard);
+
       } catch (err) {
         console.error('Error fetching leaderboard:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch leaderboard');
@@ -224,43 +270,29 @@ export const useLeaderboard = () => {
 
     fetchLeaderboard();
 
-    // Set up real-time subscription for reports and profiles
-    const reportsChannel = supabase
-      .channel('leaderboard_reports')
+    // Real-time subscription
+    const channel = supabase
+      .channel('leaderboard_realtime')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
-        table: 'reports'
+        table: 'leaderboard_history'
       }, (payload) => {
-        console.log('Real-time update: reports table changed for leaderboard', payload);
-        fetchLeaderboard();
-      })
-      .subscribe();
-
-    const profilesChannel = supabase
-      .channel('leaderboard_profiles')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'profiles',
-        filter: 'role=eq.sbu'
-      }, (payload) => {
-        console.log('Real-time update: profiles table changed for leaderboard', payload);
+        console.log('Real-time update: leaderboard_history table changed', payload);
         fetchLeaderboard();
       })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(reportsChannel);
-      supabase.removeChannel(profilesChannel);
+      supabase.removeChannel(channel);
     };
-  }, []);
+  }, [filters]);
 
   return { leaderboard, loading, error };
 };
 
-// Hook for trend data with real-time updates
-export const useTrendData = (userRole: 'admin' | 'sbu', userId?: string) => {
+// Enhanced trend data with period-based analysis
+export const useTrendData = (userRole: 'admin' | 'sbu', userId?: string, filters?: AnalyticsFilter) => {
   const [trendData, setTrendData] = useState<TrendData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -271,55 +303,40 @@ export const useTrendData = (userRole: 'admin' | 'sbu', userId?: string) => {
         setLoading(true);
         setError(null);
 
-        // Build query based on user role
+        // Get analytics summary data for trend analysis
         let query = supabase
-          .from('reports')
-          .select('created_at, status');
+          .from('analytics_summary')
+          .select('*')
+          .order('period_start', { ascending: true });
 
-        if (userRole === 'sbu' && userId) {
-          query = query.eq('user_id', userId);
+        // Apply filters
+        if (filters?.periodType) {
+          query = query.eq('period_type', filters.periodType);
         }
 
-        const { data: reports, error: reportsError } = await query;
-
-        if (reportsError) throw reportsError;
-
-        // Group reports by month
-        const monthlyData: { [key: string]: { total: number; approved: number; rejected: number } } = {};
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-        // Initialize last 6 months
-        const currentDate = new Date();
-        for (let i = 5; i >= 0; i--) {
-          const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-          const monthKey = months[date.getMonth()];
-          monthlyData[monthKey] = { total: 0, approved: 0, rejected: 0 };
+        if (filters?.year) {
+          query = query.gte('period_start', `${filters.year}-01-01`)
+                      .lt('period_start', `${filters.year + 1}-01-01`);
         }
 
-        // Process reports
-        reports?.forEach(report => {
-          const date = new Date(report.created_at);
-          const monthKey = months[date.getMonth()];
-          
-          if (monthlyData[monthKey]) {
-            monthlyData[monthKey].total++;
-            if (report.status === 'approved' || report.status === 'completed') {
-              monthlyData[monthKey].approved++;
-            } else if (report.status === 'rejected' || report.status === 'system_rejected') {
-              monthlyData[monthKey].rejected++;
-            }
-          }
-        });
+        const { data, error: fetchError } = await query;
 
-        // Convert to array format
-        const trendArray = Object.entries(monthlyData).map(([month, data]) => ({
-          month,
-          total_laporan: data.total,
-          approved: data.approved,
-          rejected: data.rejected
+        if (fetchError) throw fetchError;
+
+        // Transform data for trend visualization
+        const trendArray: TrendData[] = (data || []).map((summary: any) => ({
+          month: summary.period_name,
+          total_laporan: summary.total_reports || 0,
+          approved: summary.approved_reports || 0,
+          rejected: summary.rejected_reports || 0,
+          averageScore: summary.average_score || 0,
+          activeSBU: summary.active_sbu_count || 0,
+          periodType: summary.period_type,
+          periodName: summary.period_name
         }));
 
         setTrendData(trendArray);
+
       } catch (err) {
         console.error('Error fetching trend data:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch trend data');
@@ -330,15 +347,15 @@ export const useTrendData = (userRole: 'admin' | 'sbu', userId?: string) => {
 
     fetchTrendData();
 
-    // Set up real-time subscription
+    // Real-time subscription
     const channel = supabase
-      .channel('trend_data_reports')
+      .channel('trend_data_realtime')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
-        table: 'reports'
+        table: 'analytics_summary'
       }, (payload) => {
-        console.log('Real-time update: reports table changed for trend data', payload);
+        console.log('Real-time update: analytics_summary table changed for trend', payload);
         fetchTrendData();
       })
       .subscribe();
@@ -346,13 +363,13 @@ export const useTrendData = (userRole: 'admin' | 'sbu', userId?: string) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userRole, userId]);
+  }, [userRole, userId, filters]);
 
   return { trendData, loading, error };
 };
 
-// Hook for composition data with real-time updates
-export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string) => {
+// Enhanced composition data with KPI achievements
+export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string, filters?: AnalyticsFilter) => {
   const [compositionData, setCompositionData] = useState<CompositionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -363,44 +380,55 @@ export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string) =
         setLoading(true);
         setError(null);
 
-        // Build query based on user role
+        // Get KPI achievements from analytics summary
         let query = supabase
-          .from('reports')
-          .select('indicator_type');
+          .from('analytics_summary')
+          .select('kpi_achievements, period_name')
+          .order('period_start', { ascending: false })
+          .limit(1);
 
-        if (userRole === 'sbu' && userId) {
-          query = query.eq('user_id', userId);
+        if (filters?.periodName) {
+          query = query.eq('period_name', filters.periodName);
         }
 
-        const { data: reports, error: reportsError } = await query;
+        const { data, error: fetchError } = await query;
 
-        if (reportsError) throw reportsError;
+        if (fetchError) throw fetchError;
 
-        // Count by indicator type
-        const indicatorCounts: { [key: string]: number } = {};
-        reports?.forEach(report => {
-          const type = report.indicator_type || 'Unknown';
-          indicatorCounts[type] = (indicatorCounts[type] || 0) + 1;
-        });
+        if (data && data.length > 0 && data[0].kpi_achievements) {
+          const achievements = data[0].kpi_achievements;
+          const composition: CompositionData[] = Object.entries(achievements).map(([kpi, data]: [string, any]) => ({
+            name: kpi,
+            value: data.achievement || 0,
+            color: getKPIColor(kpi),
+            percentage: data.percentage || 0,
+            trend: data.trend || 'stable'
+          }));
 
-        // Convert to composition data format
-        const colors = [
-          'hsl(var(--primary))',
-          'hsl(var(--secondary))',
-          'hsl(var(--accent))',
-          'hsl(var(--desmon-primary))',
-          'hsl(var(--desmon-secondary))'
-        ];
+          setCompositionData(composition);
+        } else {
+          // Fallback to status-based composition
+          const { data: reports, error: reportsError } = await supabase
+            .from('reports')
+            .select('status');
 
-        const total = Object.values(indicatorCounts).reduce((sum, count) => sum + count, 0);
-        
-        const composition = Object.entries(indicatorCounts).map(([name, count], index) => ({
-          name: name.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-          value: total > 0 ? Math.round((count / total) * 100) : 0,
-          color: colors[index % colors.length]
-        }));
+          if (reportsError) throw reportsError;
 
-        setCompositionData(composition);
+          const statusCounts = reports?.reduce((acc, report) => {
+            acc[report.status] = (acc[report.status] || 0) + 1;
+            return acc;
+          }, {} as any) || {};
+
+          const composition: CompositionData[] = Object.entries(statusCounts).map(([status, count]) => ({
+            name: status.charAt(0).toUpperCase() + status.slice(1),
+            value: count as number,
+            color: getStatusColor(status),
+            percentage: (count as number / (reports?.length || 1)) * 100
+          }));
+
+          setCompositionData(composition);
+        }
+
       } catch (err) {
         console.error('Error fetching composition data:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch composition data');
@@ -411,15 +439,15 @@ export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string) =
 
     fetchCompositionData();
 
-    // Set up real-time subscription
+    // Real-time subscription
     const channel = supabase
-      .channel('composition_data_reports')
+      .channel('composition_data_realtime')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
-        table: 'reports'
+        table: 'analytics_summary'
       }, (payload) => {
-        console.log('Real-time update: reports table changed for composition data', payload);
+        console.log('Real-time update: analytics_summary table changed for composition', payload);
         fetchCompositionData();
       })
       .subscribe();
@@ -427,7 +455,119 @@ export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string) =
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userRole, userId]);
+  }, [userRole, userId, filters]);
 
   return { compositionData, loading, error };
+};
+
+// Helper functions for colors
+const getKPIColor = (kpi: string): string => {
+  const colors = {
+    'PUBLIKASI_SIARAN_PERS': '#3B82F6',
+    'PRODUKSI_KONTEN_MEDSOS': '#10B981',
+    'SKORING_PUBLIKASI_MEDIA': '#F59E0B',
+    'KAMPANYE_KOMUNIKASI': '#EF4444',
+    'OFI_TO_AFI': '#8B5CF6'
+  };
+  return colors[kpi as keyof typeof colors] || '#6B7280';
+};
+
+const getStatusColor = (status: string): string => {
+  const colors = {
+    'approved': '#10B981',
+    'completed': '#059669',
+    'pending_approval': '#F59E0B',
+    'processing': '#3B82F6',
+    'rejected': '#EF4444',
+    'failed': '#DC2626'
+  };
+  return colors[status as keyof typeof colors] || '#6B7280';
+};
+
+// New hook for performance comparison
+export const usePerformanceComparison = (filters?: AnalyticsFilter) => {
+  const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPerformanceData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Get KPI definitions and achievements
+        const { data: kpiData, error: kpiError } = await supabase
+          .from('kpi_definitions')
+          .select('*')
+          .eq('is_active', true);
+
+        if (kpiError) throw kpiError;
+
+        // Get analytics summary for current period
+        let summaryQuery = supabase
+          .from('analytics_summary')
+          .select('kpi_achievements, period_name')
+          .order('period_start', { ascending: false })
+          .limit(1);
+
+        if (filters?.periodName) {
+          summaryQuery = summaryQuery.eq('period_name', filters.periodName);
+        }
+
+        const { data: summaryData, error: summaryError } = await summaryQuery;
+
+        if (summaryError) throw summaryError;
+
+        const achievements = summaryData?.[0]?.kpi_achievements || {};
+
+        // Combine KPI definitions with achievements
+        const performance: PerformanceData[] = kpiData?.map(kpi => {
+          const achievement = achievements[kpi.code] || {};
+          const target = kpi.scoring_period === 'semester' ? kpi.semester_target : kpi.monthly_target;
+          const actual = achievement.achievement || 0;
+          const percentage = target > 0 ? (actual / target) * 100 : 0;
+
+          return {
+            indicator: kpi.name,
+            target: target || 0,
+            achievement: actual,
+            percentage: Math.round(percentage * 100) / 100,
+            score: achievement.score || 0,
+            unit: kpi.unit || '',
+            weight: kpi.weight_percentage || 0
+          };
+        }) || [];
+
+        setPerformanceData(performance);
+
+      } catch (err) {
+        console.error('Error fetching performance data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch performance data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPerformanceData();
+
+    // Real-time subscription
+    const channel = supabase
+      .channel('performance_comparison_realtime')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'analytics_summary'
+      }, (payload) => {
+        console.log('Real-time update: analytics_summary table changed for performance', payload);
+        fetchPerformanceData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [filters]);
+
+  return { performanceData, loading, error };
 };
