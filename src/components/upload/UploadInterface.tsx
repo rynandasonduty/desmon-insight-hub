@@ -215,23 +215,55 @@ const UploadInterface = () => {
       setUploadProgress(50);
 
       // Create report record
-      const { data: reportData, error: reportError } = await supabase
-        .from('reports')
-        .insert({
-          user_id: userId,
-          indicator_type: selectedIndicator,
-          file_name: file.name,
-          status: 'processing',
-          raw_data: { 
-            fileName: file.name, 
-            fileSize: file.size,
-            rowCount: excelData.length,
-            columns: Object.keys(excelData[0] || {}),
-            data: excelData
-          }
-        })
-        .select()
-        .single();
+      let reportData, reportError;
+      try {
+        const result = await supabase
+          .from('reports')
+          .insert({
+            user_id: userId,
+            indicator_type: selectedIndicator,
+            file_name: file.name,
+            file_size: file.size,
+            status: 'processing',
+            raw_data: { 
+              fileName: file.name, 
+              fileSize: file.size,
+              rowCount: excelData.length,
+              columns: Object.keys(excelData[0] || {}),
+              data: excelData
+            }
+          })
+          .select()
+          .single();
+        reportData = result.data;
+        reportError = result.error;
+      } catch (insertError: any) {
+        // If file_size column doesn't exist, retry without it
+        if (insertError?.code === '42703' && insertError?.message?.includes('file_size')) {
+          console.log('file_size column not found, retrying insert without it...');
+          const result = await supabase
+            .from('reports')
+            .insert({
+              user_id: userId,
+              indicator_type: selectedIndicator,
+              file_name: file.name,
+              status: 'processing',
+              raw_data: { 
+                fileName: file.name, 
+                fileSize: file.size,
+                rowCount: excelData.length,
+                columns: Object.keys(excelData[0] || {}),
+                data: excelData
+              }
+            })
+            .select()
+            .single();
+          reportData = result.data;
+          reportError = result.error;
+        } else {
+          reportError = insertError;
+        }
+      }
 
       if (reportError) {
         console.error('❌ Report creation error:', reportError);

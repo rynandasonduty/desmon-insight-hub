@@ -157,16 +157,50 @@ export const validateExcelData = (data: any[], template: ExcelTemplate): { isVal
 
   // Check required columns
   const firstRow = data[0];
-  const missingColumns = template.requiredColumns.filter(col => !(col in firstRow));
+  const availableColumns = Object.keys(firstRow);
+  
+  // Debug: log available columns
+  console.log('Available columns in Excel:', availableColumns);
+  console.log('Required columns:', template.requiredColumns);
+  
+  const missingColumns = template.requiredColumns.filter(col => {
+    // Check exact match first
+    if (col in firstRow) return false;
+    
+    // Check case-insensitive match
+    const colLower = col.toLowerCase();
+    const found = availableColumns.some(availableCol => 
+      availableCol.toLowerCase() === colLower
+    );
+    return !found;
+  });
   
   if (missingColumns.length > 0) {
     errors.push(`Kolom yang diperlukan tidak ditemukan: ${missingColumns.join(', ')}`);
+    errors.push(`Kolom tersedia: ${availableColumns.join(', ')}`);
+  }
+
+  // Skip row validation if required columns are missing
+  if (missingColumns.length > 0) {
+    return { isValid: false, errors };
   }
 
   // Check data types and formats
   data.forEach((row, index) => {
     template.requiredColumns.forEach(col => {
-      if (!row[col] || row[col].toString().trim() === '') {
+      // Try exact match first, then case-insensitive
+      let value = row[col];
+      if (value === undefined) {
+        const colLower = col.toLowerCase();
+        const matchingKey = availableColumns.find(availableCol => 
+          availableCol.toLowerCase() === colLower
+        );
+        if (matchingKey) {
+          value = row[matchingKey];
+        }
+      }
+      
+      if (!value || value.toString().trim() === '') {
         errors.push(`Baris ${index + 1}: Kolom '${col}' tidak boleh kosong`);
       }
     });
