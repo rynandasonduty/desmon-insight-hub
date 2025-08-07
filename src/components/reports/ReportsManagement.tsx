@@ -33,6 +33,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useReports, useReportActions, Report } from "@/hooks/useReports";
 import { supabase } from "@/integrations/supabase/client";
+import { exportReport, generateReportFileName, formatReportData } from '@/lib/report-export';
+import { createApprovalNotification } from '@/hooks/useNotifications';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface ReportsManagementProps {
   userRole: 'admin' | 'sbu';
@@ -352,6 +355,82 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
     });
   };
 
+  const handleExportReport = async (report: any, format: 'pdf' | 'excel' | 'csv') => {
+    try {
+      const reportData = {
+        title: `Laporan ${report.indicator_type}`,
+        period: new Date(report.created_at).toLocaleDateString('id-ID'),
+        generatedAt: new Date().toLocaleString('id-ID'),
+        data: formatReportData([report]),
+        summary: {
+          'Total Reports': 1,
+          'Status': report.status,
+          'Submitted By': report.submitted_by,
+          'Submitted At': new Date(report.created_at).toLocaleString('id-ID')
+        }
+      };
+
+      const options = {
+        format,
+        includeSummary: true,
+        fileName: generateReportFileName(`report-${report.indicator_type}`, format)
+      };
+
+      await exportReport(reportData.data, options, reportData);
+      
+      toast({
+        title: "Export Berhasil",
+        description: `Laporan berhasil diexport ke format ${format.toUpperCase()}`,
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Gagal",
+        description: error instanceof Error ? error.message : 'Gagal export laporan',
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleBulkExport = async (reports: any[], format: 'pdf' | 'excel' | 'csv') => {
+    try {
+      const reportData = {
+        title: `Bulk Report Export - ${reports.length} Reports`,
+        period: `${new Date(Math.min(...reports.map(r => new Date(r.created_at).getTime()))).toLocaleDateString('id-ID')} - ${new Date(Math.max(...reports.map(r => new Date(r.created_at).getTime()))).toLocaleDateString('id-ID')}`,
+        generatedAt: new Date().toLocaleString('id-ID'),
+        data: formatReportData(reports),
+        summary: {
+          'Total Reports': reports.length,
+          'Status Distribution': reports.reduce((acc, r) => {
+            acc[r.status] = (acc[r.status] || 0) + 1;
+            return acc;
+          }, {} as any),
+          'Indicators': [...new Set(reports.map(r => r.indicator_type))]
+        }
+      };
+
+      const options = {
+        format,
+        includeSummary: true,
+        fileName: generateReportFileName(`bulk-reports-${reports.length}`, format)
+      };
+
+      await exportReport(reportData.data, options, reportData);
+      
+      toast({
+        title: "Bulk Export Berhasil",
+        description: `${reports.length} laporan berhasil diexport ke format ${format.toUpperCase()}`,
+      });
+    } catch (error) {
+      console.error('Bulk export error:', error);
+      toast({
+        title: "Bulk Export Gagal",
+        description: error instanceof Error ? error.message : 'Gagal export laporan',
+        variant: "destructive"
+      });
+    }
+  };
+
   if (error) {
     return (
       <div className="space-y-6">
@@ -394,25 +473,50 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
             Export
           </Button>
           {userRole === 'admin' && selectedReports.length > 0 && (
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
                 size="sm"
-                onClick={() => handleBulkAction('approve')} 
-                disabled={processingBulk}
+                onClick={() => setBulkActionModalOpen(true)}
+                disabled={selectedReports.length === 0}
               >
-                <Check className="mr-1 h-4 w-4" />
-                Setujui ({selectedReports.length})
+                <Check className="h-4 w-4 mr-2" />
+                Bulk Approve ({selectedReports.length})
               </Button>
-              <Button 
-                variant="outline" 
+              
+              <Button
+                variant="outline"
                 size="sm"
-                onClick={() => handleBulkAction('reject')} 
-                disabled={processingBulk}
+                onClick={() => setBulkActionModalOpen(true)}
+                disabled={selectedReports.length === 0}
               >
-                <X className="mr-1 h-4 w-4" />
-                Tolak ({selectedReports.length})
+                <X className="h-4 w-4 mr-2" />
+                Bulk Reject ({selectedReports.length})
               </Button>
+              
+              {/* Bulk Export Actions */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={selectedReports.length === 0}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Bulk Export ({selectedReports.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => handleBulkExport(selectedReports, 'excel')}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export to Excel
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkExport(selectedReports, 'csv')}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export to CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkExport(selectedReports, 'pdf')}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export to PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
           <Button variant="outline" size="sm" onClick={handleRefreshData} disabled={loading}>
@@ -557,13 +661,27 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDownloadReport(report)}
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => handleExportReport(report, 'excel')}>
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Export to Excel
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExportReport(report, 'csv')}>
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Export to CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExportReport(report, 'pdf')}>
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Export to PDF
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
                       </div>

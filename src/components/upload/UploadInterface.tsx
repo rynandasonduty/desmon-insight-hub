@@ -12,9 +12,12 @@ import { Progress } from "@/components/ui/progress";
 import { useKPIDefinitions } from "@/hooks/useKPIDefinitions";
 import ETLProcessor from "@/lib/etl-processor";
 import * as XLSX from 'xlsx';
+import { EXCEL_TEMPLATES, getTemplateByCode, validateExcelData, downloadTemplate } from '@/lib/excel-templates';
+import { createUploadNotification } from '@/hooks/useNotifications';
 
 const UploadInterface = () => {
-  const [selectedIndicator, setSelectedIndicator] = useState<string>("");
+  const [selectedIndicator, setSelectedIndicator] = useState<string>('');
+  const [availableTemplates, setAvailableTemplates] = useState(EXCEL_TEMPLATES);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -121,21 +124,53 @@ const UploadInterface = () => {
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedIndicator || !selectedFile) {
+  const handleTemplateDownload = async (templateCode: string) => {
+    try {
+      await downloadTemplate(templateCode);
       toast({
-        title: "Data Tidak Lengkap",
-        description: "Silakan pilih indikator dan file Excel",
+        title: "Template Downloaded",
+        description: "Template Excel berhasil didownload",
+      });
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      toast({
+        title: "Error",
+        description: "Gagal download template: " + (error instanceof Error ? error.message : 'Unknown error'),
         variant: "destructive"
       });
-      return;
     }
+  };
 
-    setIsUploading(true);
-    setUploadProgress(0);
-    setProcessStatus("Menyiapkan upload...");
-
+  const handleFileUpload = async (file: File) => {
     try {
+      setIsUploading(true);
+      setProcessStatus("Menyiapkan upload...");
+      setUploadProgress(0);
+
+      // Validate file type
+      if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+        throw new Error('File harus berformat Excel (.xlsx atau .xls)');
+      }
+
+      // Validate indicator selection
+      if (!selectedIndicator) {
+        throw new Error('Pilih indikator terlebih dahulu');
+      }
+
+      const template = getTemplateByCode(selectedIndicator);
+      if (!template) {
+        throw new Error('Template tidak ditemukan untuk indikator yang dipilih');
+      }
+
+      // Read Excel file
+      const data = await readExcelFile(file);
+      
+      // Validate data against template
+      const validation = validateExcelData(data, template);
+      if (!validation.isValid) {
+        throw new Error(`Validasi data gagal:\n${validation.errors.join('\n')}`);
+      }
+
       // Get current user
       console.log('🔐 Getting current user...');
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -143,28 +178,25 @@ const UploadInterface = () => {
         throw new Error("User tidak terautentikasi");
       }
       console.log('✅ User authenticated:', user.id);
+      const userId = user.id;
 
-      // Get session for authorization
-      console.log('🔐 Getting session...');
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error("Session tidak valid");
+      // Create notification for successful upload
+      if (userId) {
+        await createUploadNotification(userId, file.name, 'success');
       }
-      console.log('✅ Session obtained');
 
-      // Create FormData
-      console.log('📝 Creating form data...');
+      // Continue with existing upload logic...
       const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('indicator_type', selectedIndicator);
-      formData.append('user_id', user.id);
+      formData.append('file', file);
+      formData.append('indicator', selectedIndicator);
+      formData.append('user_id', userId);
 
       setProcessStatus("Mengunggah file...");
       setUploadProgress(25);
 
       // Read and process Excel file directly
       console.log('📊 Reading Excel file...');
-      const fileBuffer = await selectedFile.arrayBuffer();
+      const fileBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(fileBuffer, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
@@ -186,13 +218,13 @@ const UploadInterface = () => {
       const { data: reportData, error: reportError } = await supabase
         .from('reports')
         .insert({
-          user_id: user.id,
+          user_id: userId,
           indicator_type: selectedIndicator,
-          file_name: selectedFile.name,
+          file_name: file.name,
           status: 'processing',
           raw_data: { 
-            fileName: selectedFile.name, 
-            fileSize: selectedFile.size,
+            fileName: file.name, 
+            fileSize: file.size,
             rowCount: excelData.length,
             columns: Object.keys(excelData[0] || {}),
             data: excelData
@@ -237,7 +269,7 @@ const UploadInterface = () => {
 
       // Reset form
       setSelectedFile(null);
-      setSelectedIndicator("");
+      setSelectedIndicator('');
       setUploadProgress(0);
       setProcessStatus("");
       
@@ -326,53 +358,59 @@ const UploadInterface = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Indicator Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="indicator">Jenis Indikator Laporan</Label>
-            {kpiLoading ? (
-              <div className="h-10 bg-muted animate-pulse rounded" />
-            ) : (
+          {/* Template Selection */}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="indicator">Pilih Indikator</Label>
               <Select value={selectedIndicator} onValueChange={setSelectedIndicator}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Pilih jenis indikator..." />
+                  <SelectValue placeholder="Pilih indikator..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {kpiDefinitions.map((kpi) => (
-                    <SelectItem key={kpi.id} value={kpi.code}>
-                      <div>
-                        <div className="font-medium">{kpi.name}</div>
-                        {kpi.description && (
-                          <div className="text-sm text-muted-foreground">{kpi.description}</div>
-                        )}
-                      </div>
+                  {availableTemplates.map((template) => (
+                    <SelectItem key={template.code} value={template.code}>
+                      {template.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {selectedIndicator && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Template Info</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(() => {
+                    const template = getTemplateByCode(selectedIndicator);
+                    return template ? (
+                      <>
+                        <p className="text-sm text-muted-foreground">{template.description}</p>
+                        <div className="text-sm">
+                          <strong>Kolom yang diperlukan:</strong>
+                          <ul className="list-disc list-inside mt-1">
+                            {template.requiredColumns.map((col) => (
+                              <li key={col}>{col}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTemplateDownload(selectedIndicator)}
+                          className="w-full"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download Template
+                        </Button>
+                      </>
+                    ) : null;
+                  })()}
+                </CardContent>
+              </Card>
             )}
           </div>
-
-          {/* Template Download */}
-          {selectedIndicator && !kpiLoading && (
-            <div className="p-4 bg-desmon-background/30 rounded-lg border border-desmon-secondary/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Template Excel Tersedia</p>
-                  <p className="text-sm text-muted-foreground">
-                    Unduh template untuk {kpiDefinitions.find(kpi => kpi.code === selectedIndicator)?.name}
-                  </p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleDownloadTemplate(selectedIndicator)}
-                  className="border-desmon-secondary text-desmon-primary hover:bg-desmon-secondary/10"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Unduh Template
-                </Button>
-              </div>
-            </div>
-          )}
 
           {/* File Upload */}
           <div className="space-y-2">
@@ -417,7 +455,7 @@ const UploadInterface = () => {
           {/* Upload Button */}
           <div className="flex justify-end">
             <Button 
-              onClick={handleUpload}
+              onClick={() => handleFileUpload(selectedFile!)}
               disabled={!selectedIndicator || !selectedFile || isUploading || kpiLoading}
               className="min-w-32"
               variant="hero"

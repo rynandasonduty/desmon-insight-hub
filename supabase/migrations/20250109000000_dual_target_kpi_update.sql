@@ -371,3 +371,25 @@ CREATE TABLE IF NOT EXISTS app_settings (
   UNIQUE (user_id, is_global)
 );
 CREATE INDEX IF NOT EXISTS idx_app_settings_user_id ON app_settings(user_id);
+
+-- Create enhanced notifications table for advanced notification system
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('info', 'success', 'warning', 'error')),
+  category TEXT NOT NULL CHECK (category IN ('upload', 'approval', 'rejection', 'system', 'kpi', 'report', 'deadline')),
+  priority TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+  is_read BOOLEAN DEFAULT false,
+  action_url TEXT,
+  action_text TEXT,
+  metadata JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  read_at TIMESTAMP WITH TIME ZONE
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_category ON notifications(category);
+CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);

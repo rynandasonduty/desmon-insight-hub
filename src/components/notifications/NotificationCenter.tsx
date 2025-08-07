@@ -1,481 +1,412 @@
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+/**
+ * Enhanced Notification Center for DASHMON
+ * Features: Categories, Priority Levels, Read/Unread Status, Actions
+ */
+
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Bell, 
+  Check, 
+  X, 
+  Trash2, 
+  AlertCircle, 
+  Info, 
   CheckCircle, 
-  XCircle, 
-  Clock, 
-  FileText, 
-  User, 
-  Settings,
   AlertTriangle,
-  TrendingUp,
-  Mail,
-  Loader2,
-  Upload
-} from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+  Clock,
+  Filter,
+  Download,
+  Upload,
+  FileText,
+  Settings,
+  Calendar,
+  BarChart3
+} from 'lucide-react';
+import { useNotifications, useNotificationPreferences, type Notification } from '@/hooks/useNotifications';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import { supabase } from "@/integrations/supabase/client";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-interface Notification {
-  id: string;
-  type: 'report_approved' | 'report_rejected' | 'report_submitted' | 'kpi_updated' | 'system' | 'user_activity' | 'report_processing' | 'report_completed' | 'report_error' | 'report_pending_approval';
-  title: string;
-  message: string;
-  created_at: string;
-  is_read: boolean;
-  related_report_id?: string;
-  user_id: string;
-}
+const NotificationCenter = () => {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
+  
+  const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead, deleteNotification, clearAllNotifications } = useNotifications(userId || undefined);
+  const { preferences, updatePreferences } = useNotificationPreferences(userId || undefined);
+  const { toast } = useToast();
 
-interface NotificationCenterProps {
-  userRole: 'admin' | 'sbu';
-}
-
-const NotificationCenter = ({ userRole }: NotificationCenterProps) => {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string>('');
-
-  // Get current user ID and fetch notifications
+  // Get current user ID
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setCurrentUserId(session.user.id);
-        await fetchNotifications(session.user.id);
-      }
-      setIsLoading(false);
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
     };
-
     getCurrentUser();
   }, []);
 
-  // Fetch notifications from database
-  const fetchNotifications = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        console.error('Error fetching notifications:', error);
-        toast({
-          title: "Gagal memuat notifikasi",
-          description: "Terjadi kesalahan saat memuat notifikasi",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      setNotifications((data as Notification[]) || []);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
+  const getNotificationIcon = (type: Notification['type'], category: Notification['category']) => {
+    switch (type) {
+      case 'success':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'error':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'warning':
+        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+      case 'info':
+      default:
+        return <Info className="h-4 w-4 text-blue-500" />;
     }
   };
 
-  // Set up real-time subscription for notifications
-  useEffect(() => {
-    if (!currentUserId) return;
+  const getCategoryIcon = (category: Notification['category']) => {
+    switch (category) {
+      case 'upload':
+        return <Upload className="h-3 w-3" />;
+      case 'approval':
+        return <Check className="h-3 w-3" />;
+      case 'rejection':
+        return <X className="h-3 w-3" />;
+      case 'kpi':
+        return <BarChart3 className="h-3 w-3" />;
+      case 'report':
+        return <FileText className="h-3 w-3" />;
+      case 'deadline':
+        return <Calendar className="h-3 w-3" />;
+      case 'system':
+      default:
+        return <Settings className="h-3 w-3" />;
+    }
+  };
 
-    console.log('Setting up real-time notification subscription for user:', currentUserId);
+  const getPriorityColor = (priority: Notification['priority']) => {
+    switch (priority) {
+      case 'urgent':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'high':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
 
-    const channel = supabase
-      .channel('notification-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${currentUserId}`
-        },
-        (payload) => {
-          console.log('New notification received:', payload.new);
-          const newNotification = payload.new as Notification;
-          
-          setNotifications(prev => [newNotification, ...prev]);
-          
-          // Show toast for new notification
-          toast({
-            title: newNotification.title,
-            description: newNotification.message,
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${currentUserId}`
-        },
-        (payload) => {
-          console.log('Notification updated:', payload.new);
-          const updatedNotification = payload.new as Notification;
-          
-          setNotifications(prev => 
-            prev.map(notif => 
-              notif.id === updatedNotification.id ? updatedNotification : notif
-            )
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      console.log('Cleaning up notification subscription');
-      supabase.removeChannel(channel);
-    };
-  }, [currentUserId]);
+  const getCategoryColor = (category: Notification['category']) => {
+    switch (category) {
+      case 'upload':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'approval':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'rejection':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'kpi':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'report':
+        return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      case 'deadline':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'system':
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
 
   const filteredNotifications = notifications.filter(notification => {
-    if (filter === 'unread') return !notification.is_read;
-    if (filter === 'read') return notification.is_read;
+    // Filter by tab
+    if (activeTab !== 'all' && notification.category !== activeTab) {
+      return false;
+    }
+    
+    // Filter by priority
+    if (filterPriority !== 'all' && notification.priority !== filterPriority) {
+      return false;
+    }
+    
+    // Filter by preferences
+    if (!preferences[notification.category as keyof typeof preferences]) {
+      return false;
+    }
+    
+    if (!preferences.priority_levels[notification.priority as keyof typeof preferences.priority_levels]) {
+      return false;
+    }
+    
     return true;
   });
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
-
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'report_approved':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'report_rejected':
-        return <XCircle className="h-4 w-4 text-red-600" />;
-      case 'report_submitted':
-      case 'report_pending_approval':
-        return <FileText className="h-4 w-4 text-blue-600" />;
-      case 'report_processing':
-        return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />;
-      case 'report_completed':
-        return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'report_error':
-        return <AlertTriangle className="h-4 w-4 text-red-600" />;
-      case 'kpi_updated':
-        return <TrendingUp className="h-4 w-4 text-purple-600" />;
-      case 'system':
-        return <Settings className="h-4 w-4 text-orange-600" />;
-      case 'user_activity':
-        return <User className="h-4 w-4 text-indigo-600" />;
-      default:
-        return <Bell className="h-4 w-4 text-muted-foreground" />;
-    }
-  };
-
-  const getPriorityFromType = (type: string) => {
-    switch (type) {
-      case 'report_approved':
-      case 'report_rejected':
-      case 'report_error':
-        return 'high';
-      case 'report_processing':
-      case 'report_completed':
-      case 'report_submitted':
-      case 'report_pending_approval':
-        return 'medium';
-      default:
-        return 'low';
-    }
-  };
-
-  const getPriorityBadge = (type: string) => {
-    const priority = getPriorityFromType(type);
-    switch (priority) {
-      case 'high':
-        return <Badge variant="destructive" className="text-xs">Tinggi</Badge>;
-      case 'medium':
-        return <Badge variant="secondary" className="text-xs">Sedang</Badge>;
-      case 'low':
-        return <Badge variant="outline" className="text-xs">Rendah</Badge>;
-      default:
-        return null;
-    }
-  };
-
-  const markAsRead = async (notificationId: string) => {
+  const handleMarkAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId);
-
-      if (error) {
-        console.error('Error marking notification as read:', error);
-        return;
-      }
-
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif.id === notificationId 
-            ? { ...notif, is_read: true }
-            : notif
-        )
-      );
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
-  };
-
-  const markAsUnread = async (notificationId: string) => {
-    try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: false })
-        .eq('id', notificationId);
-
-      if (error) {
-        console.error('Error marking notification as unread:', error);
-        return;
-      }
-
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif.id === notificationId 
-            ? { ...notif, is_read: false }
-            : notif
-        )
-      );
-    } catch (error) {
-      console.error('Error marking notification as unread:', error);
-    }
-  };
-
-  const markAllAsRead = async () => {
-    try {
-      const unreadNotificationIds = notifications
-        .filter(n => !n.is_read)
-        .map(n => n.id);
-
-      if (unreadNotificationIds.length === 0) return;
-
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .in('id', unreadNotificationIds);
-
-      if (error) {
-        console.error('Error marking all notifications as read:', error);
-        return;
-      }
-
-      setNotifications(prev => 
-        prev.map(notif => ({ ...notif, is_read: true }))
-      );
-      
+      await markAsRead(notificationId);
       toast({
-        title: "Semua notifikasi ditandai sudah dibaca",
-        description: `${unreadCount} notifikasi telah ditandai sebagai sudah dibaca`,
+        title: "Notification marked as read",
+        description: "Notification has been marked as read",
       });
     } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+      toast({
+        title: "Error",
+        description: "Failed to mark notification as read",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId: string) => {
+    try {
+      await deleteNotification(notificationId);
+      toast({
+        title: "Notification deleted",
+        description: "Notification has been deleted",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete notification",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+      toast({
+        title: "All notifications marked as read",
+        description: "All notifications have been marked as read",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to mark all notifications as read",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleClearAll = async () => {
+    try {
+      await clearAllNotifications();
+      toast({
+        title: "All notifications cleared",
+        description: "All notifications have been cleared",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to clear all notifications",
+        variant: "destructive"
+      });
     }
   };
 
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffDays > 0) {
-      return `${diffDays} hari yang lalu`;
-    } else if (diffHours > 0) {
-      return `${diffHours} jam yang lalu`;
-    } else {
-      return "Baru saja";
-    }
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    
+    return date.toLocaleDateString('id-ID');
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Bell className="h-8 w-8" />
-            Notifikasi
-            {unreadCount > 0 && (
-              <Badge className="bg-red-600 text-white">{unreadCount}</Badge>
-            )}
-            <div className="flex items-center gap-1 text-sm font-normal bg-green-100 text-green-800 px-2 py-1 rounded-full">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              Live
-            </div>
-          </h1>
-          <p className="text-muted-foreground">
-            Kelola dan pantau notifikasi sistem real-time
-            {userRole === 'sbu' && (
-              <span className="block text-sm text-primary font-medium">
-                Notifikasi khusus untuk pengguna SBU
-              </span>
-            )}
-          </p>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setFilter(filter === 'all' ? 'unread' : 'all')}
-          >
-            {filter === 'all' ? 'Tampilkan Belum Dibaca' : 'Tampilkan Semua'}
-          </Button>
-          {unreadCount > 0 && (
-            <Button 
-              variant="hero" 
-              size="sm"
-              onClick={markAllAsRead}
-            >
-              Tandai Semua Sudah Dibaca
-            </Button>
-          )}
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-8 bg-muted animate-pulse rounded" />
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-20 bg-muted animate-pulse rounded" />
+          ))}
         </div>
       </div>
+    );
+  }
 
-      {/* Filter Tabs */}
+  if (error) {
+    return (
       <Card>
-        <CardContent className="p-4">
-          <div className="flex gap-2">
-            <Button 
-              variant={filter === 'all' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setFilter('all')}
-            >
-              Semua ({notifications.length})
-            </Button>
-            <Button 
-              variant={filter === 'unread' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setFilter('unread')}
-            >
-              Belum Dibaca ({unreadCount})
-            </Button>
-            <Button 
-              variant={filter === 'read' ? 'default' : 'outline'} 
-              size="sm"
-              onClick={() => setFilter('read')}
-            >
-              Sudah Dibaca ({notifications.length - unreadCount})
-            </Button>
+        <CardContent className="p-6">
+          <div className="text-center text-red-600">
+            <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+            <p>Error loading notifications: {error}</p>
           </div>
         </CardContent>
       </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Notification Center</h1>
+          <p className="text-muted-foreground">
+            {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleMarkAllAsRead}
+            disabled={unreadCount === 0}
+          >
+            <Check className="h-4 w-4 mr-2" />
+            Mark All Read
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearAll}
+            disabled={notifications.length === 0}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Clear All
+          </Button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList>
+            <TabsTrigger value="all">All ({notifications.length})</TabsTrigger>
+            <TabsTrigger value="upload">Upload ({notifications.filter(n => n.category === 'upload').length})</TabsTrigger>
+            <TabsTrigger value="approval">Approval ({notifications.filter(n => n.category === 'approval').length})</TabsTrigger>
+            <TabsTrigger value="rejection">Rejection ({notifications.filter(n => n.category === 'rejection').length})</TabsTrigger>
+            <TabsTrigger value="kpi">KPI ({notifications.filter(n => n.category === 'kpi').length})</TabsTrigger>
+            <TabsTrigger value="system">System ({notifications.filter(n => n.category === 'system').length})</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <Select value={filterPriority} onValueChange={setFilterPriority}>
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Priority</SelectItem>
+            <SelectItem value="urgent">Urgent</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Notifications List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Daftar Notifikasi</CardTitle>
-          <CardDescription>
-            Menampilkan {filteredNotifications.length} notifikasi
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <ScrollArea className="h-[600px]">
-            <div className="space-y-1 p-4">
-              {filteredNotifications.map((notification, index) => (
-                <div key={notification.id}>
-                  <div 
-                    className={`p-4 rounded-lg cursor-pointer transition-colors ${
-                      !notification.is_read 
-                        ? 'bg-primary/5 border-l-4 border-l-primary hover:bg-primary/10' 
-                        : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => !notification.is_read && markAsRead(notification.id)}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="mt-1">
-                          {getNotificationIcon(notification.type)}
-                        </div>
-                        
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className={`font-medium ${!notification.is_read ? 'font-semibold' : ''}`}>
-                              {notification.title}
-                            </h4>
-                            {getPriorityBadge(notification.type)}
-                            {!notification.is_read && (
-                              <div className="w-2 h-2 bg-primary rounded-full"></div>
-                            )}
-                          </div>
-                          
-                          <p className="text-sm text-muted-foreground">
-                            {notification.message}
-                          </p>
-                          
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {formatTimeAgo(notification.created_at)}
-                            {notification.related_report_id && (
-                              <>
-                                <span>•</span>
-                                <span>ID: {notification.related_report_id}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
+      <div className="space-y-2">
+        {filteredNotifications.length === 0 ? (
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center text-muted-foreground">
+                <Bell className="h-8 w-8 mx-auto mb-2" />
+                <p>No notifications found</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          filteredNotifications.map((notification) => (
+            <Card 
+              key={notification.id} 
+              className={cn(
+                "transition-all duration-200 hover:shadow-md",
+                !notification.is_read && "border-l-4 border-l-blue-500 bg-blue-50/50"
+              )}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-1">
+                    {getNotificationIcon(notification.type, notification.category)}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <h3 className={cn(
+                          "font-medium text-sm",
+                          !notification.is_read && "font-semibold"
+                        )}>
+                          {notification.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {notification.message}
+                        </p>
                       </div>
                       
-                      <div className="flex gap-1">
-                        {notification.is_read ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              markAsUnread(notification.id);
-                            }}
-                          >
-                            <Mail className="h-3 w-3" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              markAsRead(notification.id);
-                            }}
-                          >
-                            <CheckCircle className="h-3 w-3" />
+                      <div className="flex items-center gap-2">
+                        <Badge 
+                          variant="outline" 
+                          className={cn("text-xs", getPriorityColor(notification.priority))}
+                        >
+                          {notification.priority}
+                        </Badge>
+                        <Badge 
+                          variant="outline" 
+                          className={cn("text-xs", getCategoryColor(notification.category))}
+                        >
+                          <div className="flex items-center gap-1">
+                            {getCategoryIcon(notification.category)}
+                            {notification.category}
+                          </div>
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between mt-3">
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatTimeAgo(notification.created_at)}
+                        </span>
+                        {notification.action_url && (
+                          <Button variant="link" size="sm" className="h-auto p-0">
+                            {notification.action_text || 'View'}
                           </Button>
                         )}
                       </div>
+                      
+                      <div className="flex items-center gap-1">
+                        {!notification.is_read && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMarkAsRead(notification.id)}
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteNotification(notification.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                  
-                  {index < filteredNotifications.length - 1 && <Separator />}
                 </div>
-              ))}
-
-              {filteredNotifications.length === 0 && (
-                <div className="text-center py-12">
-                  <Bell className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">
-                    {filter === 'unread' ? 'Tidak ada notifikasi baru' : 'Tidak ada notifikasi'}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {filter === 'unread' 
-                      ? 'Semua notifikasi telah dibaca'
-                      : 'Belum ada notifikasi yang masuk'
-                    }
-                  </p>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   );
 };

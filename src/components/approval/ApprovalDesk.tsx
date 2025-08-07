@@ -28,6 +28,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { createApprovalNotification } from '@/hooks/useNotifications';
 
 // Report interface
 interface Report {
@@ -621,6 +622,12 @@ const ApprovalDesk = () => {
           : report
       ));
       
+      // Create notification for the report submitter
+      const report = reports.find(r => r.id === reportId);
+      if (report && report.user_id) {
+        await createApprovalNotification(report.user_id, report.fileName, 'approved', note);
+      }
+      
       if (!bulkAction) { // Only show individual toast if not part of bulk action
         toast({
           title: "Laporan Disetujui",
@@ -675,6 +682,12 @@ const ApprovalDesk = () => {
           ? { ...report, status: 'rejected', rejectionReason: reason }
           : report
       ));
+      
+      // Create notification for the report submitter
+      const report = reports.find(r => r.id === reportId);
+      if (report && report.user_id) {
+        await createApprovalNotification(report.user_id, report.fileName, 'rejected', reason);
+      }
       
       if (!bulkAction) { // Only show individual toast if not part of bulk action
         toast({

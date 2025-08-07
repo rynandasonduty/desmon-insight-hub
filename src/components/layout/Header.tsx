@@ -13,9 +13,9 @@ interface HeaderProps {
   userRole: 'admin' | 'sbu';
   userName: string;
   notificationCount: number;
-  onMenuToggle?: () => void;
-  onSignOut?: () => void;
-  onNotificationClick?: () => void;
+  onMenuToggle: () => void;
+  onSignOut: () => void;
+  onNotificationClick: () => void;
 }
 
 const Header = ({ userRole, userName, notificationCount, onMenuToggle, onSignOut, onNotificationClick }: HeaderProps) => {
@@ -46,17 +46,20 @@ const Header = ({ userRole, userName, notificationCount, onMenuToggle, onSignOut
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Notifications */}
+          {/* Notification Bell */}
           <Button
             variant="ghost"
-            size="icon"
-            className="relative text-white hover:bg-white/10"
+            size="sm"
             onClick={onNotificationClick}
+            className="relative"
           >
             <Bell className="h-5 w-5" />
             {notificationCount > 0 && (
-              <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center bg-desmon-accent text-foreground text-xs">
-                {notificationCount > 9 ? '9+' : notificationCount}
+              <Badge 
+                variant="destructive" 
+                className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
+              >
+                {notificationCount > 99 ? '99+' : notificationCount}
               </Badge>
             )}
           </Button>
