@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
+import nodemailer from 'nodemailer';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +11,33 @@ const corsHeaders = {
 const supabaseUrl = "https://vzpyamvunnhlzypzdbpf.supabase.co";
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Helper to send email
+async function sendEmail(to, subject, text) {
+  // Fetch SMTP settings from app_settings
+  const { data: settingsData } = await supabase
+    .from('app_settings')
+    .select('settings')
+    .eq('is_global', true)
+    .single();
+  if (!settingsData || !settingsData.settings?.enableEmailNotifications) return;
+  const smtp = settingsData.settings;
+  const transporter = nodemailer.createTransport({
+    host: smtp.smtpHost,
+    port: parseInt(smtp.smtpPort, 10),
+    secure: false,
+    auth: {
+      user: smtp.smtpUser,
+      pass: smtp.smtpPassword
+    }
+  });
+  await transporter.sendMail({
+    from: smtp.smtpUser,
+    to,
+    subject,
+    text
+  });
+}
 
 serve(async (req) => {
   console.log('🔐 Admin Action: Processing admin report action...');
@@ -124,6 +152,20 @@ serve(async (req) => {
         console.error('⚠️ Admin Action: Error triggering ETL Stage 2:', workerError);
       }
 
+      // Send email notification to submitter
+      const { data: submitterProfile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', report.user_id)
+        .single();
+      if (submitterProfile?.email) {
+        await sendEmail(
+          submitterProfile.email,
+          'Laporan Anda Disetujui',
+          `Laporan "${report.file_name}" telah disetujui admin dan akan dilanjutkan ke proses kalkulasi skor.${notes ? ` Catatan: ${notes}` : ''}`
+        );
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -167,6 +209,20 @@ serve(async (req) => {
           message: `Laporan "${report.file_name}" ditolak oleh admin. Alasan: ${reason}`,
           related_report_id: reportId
         });
+
+      // Send email notification to submitter
+      const { data: submitterProfile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', report.user_id)
+        .single();
+      if (submitterProfile?.email) {
+        await sendEmail(
+          submitterProfile.email,
+          'Laporan Anda Ditolak',
+          `Laporan "${report.file_name}" ditolak admin. Alasan: ${reason || '-'}${notes ? `\nCatatan: ${notes}` : ''}`
+        );
+      }
 
       return new Response(
         JSON.stringify({

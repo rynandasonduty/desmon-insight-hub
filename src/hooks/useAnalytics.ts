@@ -205,14 +205,15 @@ export const useLeaderboard = () => {
         }) || [];
 
         // Sort by score and add ranks
-        const sortedLeaderboard = sbuScores
-          .sort((a, b) => b.score - a.score)
-          .map((item, index) => ({
-            ...item,
-            rank: index + 1,
-            change: calculateChange(item.userId, item.score) // Calculate actual change
-          }));
-
+        const sortedLeaderboard = await Promise.all(
+          sbuScores
+            .sort((a, b) => b.score - a.score)
+            .map(async (item, index) => ({
+              ...item,
+              rank: index + 1,
+              change: await calculateChange(item.userId, item.score)
+            }))
+        );
         setLeaderboard(sortedLeaderboard);
       } catch (err) {
         console.error('Error fetching leaderboard:', err);
@@ -432,10 +433,25 @@ export const useCompositionData = (userRole: 'admin' | 'sbu', userId?: string) =
   return { compositionData, loading, error };
 };
 
-// Add function to calculate actual change from previous period
-const calculateChange = (userId: string, currentScore: number): string => {
-  // TODO: Implement actual change calculation from previous period
-  // This should query historical data and calculate the difference
-  // For now, return a placeholder
-  return '+0.0';
+// Replace calculateChange with actual implementation
+const calculateChange = async (userId: string, currentScore: number): Promise<string> => {
+  // Get previous period (assume monthly for now)
+  const now = new Date();
+  const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevPeriodEnd = new Date(periodStart.getTime() - 1);
+  const prevPeriodStart = new Date(prevPeriodEnd.getFullYear(), prevPeriodEnd.getMonth(), 1);
+
+  const { data, error } = await supabase
+    .from('leaderboard_history')
+    .select('score')
+    .eq('user_id', userId)
+    .gte('period_start', prevPeriodStart.toISOString().split('T')[0])
+    .lte('period_end', prevPeriodEnd.toISOString().split('T')[0])
+    .order('period_end', { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) return '+0.0';
+  const prevScore = data[0].score || 0;
+  const diff = currentScore - prevScore;
+  return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}`;
 };

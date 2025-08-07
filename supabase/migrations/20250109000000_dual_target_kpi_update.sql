@@ -347,3 +347,27 @@ BEGIN
   RETURN scoring_result;
 END;
 $$;
+
+-- Create leaderboard_history table for tracking historical leaderboard scores
+CREATE TABLE IF NOT EXISTS leaderboard_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  sbu_name TEXT,
+  score DECIMAL,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_history_user_id ON leaderboard_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_history_period ON leaderboard_history(period_start, period_end);
+
+-- Create app_settings table for persistent application/user settings
+CREATE TABLE IF NOT EXISTS app_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID,
+  is_global BOOLEAN DEFAULT false,
+  settings JSONB,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE (user_id, is_global)
+);
+CREATE INDEX IF NOT EXISTS idx_app_settings_user_id ON app_settings(user_id);
