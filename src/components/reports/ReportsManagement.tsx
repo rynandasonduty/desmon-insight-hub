@@ -5,6 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   Search, 
   Filter, 
@@ -20,7 +23,10 @@ import {
   XCircle,
   Clock,
   Upload,
-  RefreshCw
+  RefreshCw,
+  Settings,
+  Check,
+  X
 } from "lucide-react";
 import ReportDetailModal from "./ReportDetailModal";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +48,11 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [indicatorTypes, setIndicatorTypes] = useState<string[]>([]);
+  const [bulkActionModalOpen, setBulkActionModalOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<'approve' | 'reject' | null>(null);
+  const [bulkNotes, setBulkNotes] = useState("");
+  const [bulkReason, setBulkReason] = useState("");
+  const [processingBulk, setProcessingBulk] = useState(false);
   
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -98,7 +109,11 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedReports(filteredReports.map(report => report.id));
+      // Only select reports that can be bulk processed (pending approval)
+      const selectableReports = filteredReports
+        .filter(report => report.status === 'pending_approval')
+        .map(report => report.id);
+      setSelectedReports(selectableReports);
     } else {
       setSelectedReports([]);
     }
@@ -109,6 +124,99 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
       setSelectedReports([...selectedReports, reportId]);
     } else {
       setSelectedReports(selectedReports.filter(id => id !== reportId));
+    }
+  };
+
+  const handleBulkAction = (action: 'approve' | 'reject') => {
+    if (selectedReports.length === 0) {
+      toast({
+        title: "Error",
+        description: "Pilih minimal satu laporan untuk diproses.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setBulkAction(action);
+    setBulkActionModalOpen(true);
+    setBulkNotes("");
+    setBulkReason("");
+  };
+
+  const handleExecuteBulkAction = async () => {
+    if (!bulkAction || selectedReports.length === 0 || !userId) return;
+
+    if (bulkAction === 'reject' && !bulkReason.trim()) {
+      toast({
+        title: "Error",
+        description: "Alasan penolakan harus diisi.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setProcessingBulk(true);
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (const reportId of selectedReports) {
+        try {
+          let result;
+          if (bulkAction === 'approve') {
+            result = await approveReport(reportId, userId, bulkNotes || undefined);
+          } else {
+            result = await rejectReport(reportId, userId, bulkReason);
+          }
+
+          if (result.success) {
+            successCount++;
+          } else {
+            errorCount++;
+            errors.push(`Report ${reportId}: ${result.error}`);
+          }
+        } catch (error) {
+          errorCount++;
+          errors.push(`Report ${reportId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // Show results
+      if (successCount > 0) {
+        toast({
+          title: "Bulk Action Berhasil",
+          description: `${successCount} laporan berhasil ${bulkAction === 'approve' ? 'disetujui' : 'ditolak'}.${errorCount > 0 ? ` ${errorCount} laporan gagal diproses.` : ''}`,
+        });
+      }
+
+      if (errorCount > 0) {
+        console.error('Bulk action errors:', errors);
+        toast({
+          title: "Beberapa Laporan Gagal Diproses",
+          description: `${errorCount} laporan gagal diproses. Periksa console untuk detail.`,
+          variant: "destructive"
+        });
+      }
+
+      // Reset state and refresh data
+      setSelectedReports([]);
+      setBulkActionModalOpen(false);
+      setBulkAction(null);
+      setBulkNotes("");
+      setBulkReason("");
+      refetch();
+
+    } catch (error) {
+      console.error('Bulk action error:', error);
+      toast({
+        title: "Error",
+        description: "Terjadi kesalahan saat memproses bulk action.",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessingBulk(false);
     }
   };
 
@@ -286,9 +394,26 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
             Export
           </Button>
           {userRole === 'admin' && selectedReports.length > 0 && (
-            <Button variant="hero" disabled={actionLoading}>
-              Bulk Action ({selectedReports.length})
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleBulkAction('approve')} 
+                disabled={processingBulk}
+              >
+                <Check className="mr-1 h-4 w-4" />
+                Setujui ({selectedReports.length})
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleBulkAction('reject')} 
+                disabled={processingBulk}
+              >
+                <X className="mr-1 h-4 w-4" />
+                Tolak ({selectedReports.length})
+              </Button>
+            </div>
           )}
           <Button variant="outline" size="sm" onClick={handleRefreshData} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -299,239 +424,231 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Cari berdasarkan nama file atau pembuat..."
+                  placeholder="Cari laporan atau pengirim..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className="pl-10 w-64"
                 />
               </div>
+              
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Status</SelectItem>
+                  <SelectItem value="pending_approval">Pending</SelectItem>
+                  <SelectItem value="approved">Disetujui</SelectItem>
+                  <SelectItem value="completed">Selesai</SelectItem>
+                  <SelectItem value="rejected">Ditolak</SelectItem>
+                  <SelectItem value="system_rejected">Ditolak Sistem</SelectItem>
+                  <SelectItem value="failed">Gagal</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={indicatorFilter} onValueChange={setIndicatorFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Tipe Indikator" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Indikator</SelectItem>
+                  {indicatorTypes.map(type => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Status</SelectItem>
-                <SelectItem value="completed">Selesai</SelectItem>
-                <SelectItem value="approved">Disetujui</SelectItem>
-                <SelectItem value="pending_approval">Menunggu Approval</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="rejected">Ditolak</SelectItem>
-                <SelectItem value="system_rejected">Ditolak Sistem</SelectItem>
-                <SelectItem value="processing">Diproses</SelectItem>
-                <SelectItem value="failed">Gagal</SelectItem>
-              </SelectContent>
-            </Select>
 
-            <Select value={indicatorFilter} onValueChange={setIndicatorFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Jenis Indikator" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Indikator</SelectItem>
-                {indicatorTypes.map(type => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button variant="outline" onClick={() => {
-              toast({
-                title: "Filter Diterapkan",
-                description: "Filter laporan berhasil diterapkan.",
-              });
-            }}>
-              <Filter className="mr-2 h-4 w-4" />
-              Filter
-            </Button>
-            <Button variant="outline" onClick={handleGenerateReport}>
-              <FileText className="mr-2 h-4 w-4" />
-              Generate Report
-            </Button>
-            <Button onClick={handleExportReports}>
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Reports Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Daftar Laporan</CardTitle>
-              <CardDescription>
-                {loading ? 'Memuat data...' : `Menampilkan ${filteredReports.length} laporan`}
-              </CardDescription>
-            </div>
-            {userRole === 'admin' && !loading && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="select-all"
-                  checked={filteredReports.length > 0 && selectedReports.length === filteredReports.length}
-                  onCheckedChange={handleSelectAll}
-                />
-                <label htmlFor="select-all" className="text-sm">Pilih Semua</label>
+            {/* Bulk Selection Controls */}
+            {userRole === 'admin' && filteredReports.some(r => r.status === 'pending_approval') && (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="select-all"
+                    checked={selectedReports.length > 0 && selectedReports.length === filteredReports.filter(r => r.status === 'pending_approval').length}
+                    onCheckedChange={handleSelectAll}
+                  />
+                  <Label htmlFor="select-all" className="text-sm font-medium">
+                    Pilih Semua Pending ({filteredReports.filter(r => r.status === 'pending_approval').length})
+                  </Label>
+                </div>
+                {selectedReports.length > 0 && (
+                  <Badge variant="secondary">{selectedReports.length} dipilih</Badge>
+                )}
               </div>
             )}
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {loading ? (
-              // Loading skeleton
-              Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-4 h-4 bg-muted animate-pulse rounded" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 bg-muted animate-pulse rounded w-64" />
-                      <div className="h-3 bg-muted animate-pulse rounded w-48" />
-                    </div>
+          {loading ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+                  <div className="w-4 h-4 bg-muted animate-pulse rounded" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-muted animate-pulse rounded w-1/3" />
+                    <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
                   </div>
-                  <div className="flex gap-2">
-                    <div className="h-8 w-16 bg-muted animate-pulse rounded" />
-                    <div className="h-8 w-16 bg-muted animate-pulse rounded" />
-                  </div>
+                  <div className="w-20 h-6 bg-muted animate-pulse rounded" />
+                  <div className="w-24 h-8 bg-muted animate-pulse rounded" />
                 </div>
-              ))
-            ) : filteredReports.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <FileText className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                <p>Tidak ada laporan yang ditemukan</p>
-              </div>
-            ) : (
-              filteredReports.map((report) => (
-                <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50">
-                  <div className="flex items-center space-x-4">
-                    {userRole === 'admin' && (
-                      <Checkbox
-                        checked={selectedReports.includes(report.id)}
+              ))}
+            </div>
+          ) : filteredReports.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="mx-auto h-12 w-12 mb-4 opacity-50" />
+              <p>Tidak ada laporan yang ditemukan</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredReports.map((report) => {
+                const canSelect = userRole === 'admin' && report.status === 'pending_approval';
+                const isSelected = selectedReports.includes(report.id);
+                
+                return (
+                  <div key={report.id} className={`flex items-center space-x-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors ${isSelected ? 'bg-blue-50 border-blue-200' : ''}`}>
+                    {canSelect && (
+                      <Checkbox 
+                        checked={isSelected}
                         onCheckedChange={(checked) => handleSelectReport(report.id, checked as boolean)}
                       />
                     )}
                     
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{report.fileName}</span>
-                        {getStatusBadge(report.status)}
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {report.submittedBy}
-                        </div>
-                        {userRole === 'admin' && (
-                          <div className="flex items-center gap-1">
-                            <span>•</span>
-                            <span>{report.sbu}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold text-sm">{report.fileName}</h3>
+                          <div className="text-xs text-muted-foreground space-y-1">
+                            <div className="flex items-center gap-4">
+                              <span className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {report.submittedBy}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {report.submittedAt}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <FileText className="h-3 w-3" />
+                                {report.indicatorType}
+                              </span>
+                            </div>
+                            {report.calculatedScore !== null && (
+                              <div className="flex items-center gap-1 text-blue-600 font-medium">
+                                <TrendingUp className="h-3 w-3" />
+                                Skor: {report.calculatedScore}
+                              </div>
+                            )}
                           </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {report.submittedAt}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span>•</span>
-                          <span>{report.indicatorType}</span>
-                        </div>
-                        {report.calculatedScore && (
-                          <div className="flex items-center gap-1">
-                            <TrendingUp className="h-3 w-3" />
-                            Score: {report.calculatedScore}
+                        <div className="flex items-center gap-3">
+                          {getStatusBadge(report.status)}
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewDetail(report)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDownloadReport(report)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
                           </div>
-                        )}
+                        </div>
                       </div>
-
-                      {report.rejectionReason && (
-                        <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                          <strong>Alasan Penolakan:</strong> {report.rejectionReason}
-                        </div>
-                      )}
-
-                      {report.approvedBy && report.approvedAt && (
-                        <div className="text-sm text-green-600">
-                          Disetujui oleh {report.approvedBy} pada {report.approvedAt}
-                        </div>
-                      )}
                     </div>
                   </div>
-
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleViewDetail(report)}>
-                      <Eye className="mr-1 h-3 w-3" />
-                      Detail
-                    </Button>
-                    {userRole === 'admin' && (report.status === 'pending' || report.status === 'pending_approval') && (
-                      <>
-                        <Button 
-                          variant="default" 
-                          size="sm" 
-                          onClick={() => handleApproveReport(report.id)}
-                          disabled={actionLoading}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          <CheckCircle className="mr-1 h-3 w-3" />
-                          Setujui
-                        </Button>
-                        <Button 
-                          variant="destructive" 
-                          size="sm" 
-                          onClick={() => handleRejectReport(report.id, "Ditolak oleh admin")}
-                          disabled={actionLoading}
-                        >
-                          <XCircle className="mr-1 h-3 w-3" />
-                          Tolak
-                        </Button>
-                      </>
-                    )}
-                    {(userRole === 'sbu' && report.status === 'rejected') && (
-                      <Button variant="outline" size="sm" onClick={() => {
-                        toast({
-                          title: "Redirect ke Upload",
-                          description: "Mengarahkan ke halaman upload untuk mengunggah ulang laporan.",
-                        });
-                        handleUploadNew();
-                      }}>
-                        <Edit className="mr-1 h-3 w-3" />
-                        Upload Ulang
-                      </Button>
-                    )}
-                    <Button variant="outline" size="sm" onClick={() => handleDownloadReport(report)}>
-                      <Download className="mr-1 h-3 w-3" />
-                      Download
-                    </Button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Bulk Action Modal */}
+      <Dialog open={bulkActionModalOpen} onOpenChange={setBulkActionModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {bulkAction === 'approve' ? 'Setujui Laporan' : 'Tolak Laporan'}
+            </DialogTitle>
+            <DialogDescription>
+              Anda akan {bulkAction === 'approve' ? 'menyetujui' : 'menolak'} {selectedReports.length} laporan.
+              {bulkAction === 'reject' && ' Alasan penolakan harus diisi.'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {bulkAction === 'approve' ? (
+              <div className="space-y-2">
+                <Label htmlFor="bulk-notes">Catatan (Opsional)</Label>
+                <Textarea
+                  id="bulk-notes"
+                  placeholder="Tambahkan catatan untuk persetujuan..."
+                  value={bulkNotes}
+                  onChange={(e) => setBulkNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="bulk-reason">Alasan Penolakan *</Label>
+                <Textarea
+                  id="bulk-reason"
+                  placeholder="Berikan alasan mengapa laporan ditolak..."
+                  value={bulkReason}
+                  onChange={(e) => setBulkReason(e.target.value)}
+                  rows={3}
+                  required
+                />
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setBulkActionModalOpen(false)} disabled={processingBulk}>
+              Batal
+            </Button>
+            <Button 
+              onClick={handleExecuteBulkAction} 
+              disabled={processingBulk || (bulkAction === 'reject' && !bulkReason.trim())}
+              variant={bulkAction === 'approve' ? 'default' : 'destructive'}
+            >
+              {processingBulk ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Memproses...
+                </>
+              ) : (
+                <>
+                  {bulkAction === 'approve' ? <Check className="mr-2 h-4 w-4" /> : <X className="mr-2 h-4 w-4" />}
+                  {bulkAction === 'approve' ? 'Setujui' : 'Tolak'} ({selectedReports.length})
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Report Detail Modal */}
       <ReportDetailModal
         report={selectedReport}
-        isOpen={detailModalOpen}
+        open={detailModalOpen}
         onClose={handleCloseDetailModal}
-        userRole={userRole}
-        onApprove={async (reportId: string) => {
-          await handleApproveReport(reportId);
-        }}
-        onReject={async (reportId: string, reason: string) => {
-          await handleRejectReport(reportId, reason);
-        }}
+        onApprove={userRole === 'admin' ? handleApproveReport : undefined}
+        onReject={userRole === 'admin' ? handleRejectReport : undefined}
+        loading={actionLoading}
       />
     </div>
   );

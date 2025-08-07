@@ -24,7 +24,8 @@ import {
   Calendar,
   AlertCircle,
   CheckCircle2,
-  XCircle
+  XCircle,
+  RefreshCw
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -355,8 +356,13 @@ const ApprovalDesk = () => {
   const [sbuFilter, setSbuFilter] = useState("all");
   const [indicatorFilter, setIndicatorFilter] = useState("all");
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
-  const [reports, setReports] = useState<Report[]>([]); // Awal kosong, tidak pakai mock
+  const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [bulkActionModalOpen, setBulkActionModalOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<'approve' | 'reject' | null>(null);
+  const [bulkNotes, setBulkNotes] = useState("");
+  const [bulkReason, setBulkReason] = useState("");
+  const [processingBulk, setProcessingBulk] = useState(false);
 
   // Fetch real reports from database
   const fetchReports = async () => {
@@ -455,7 +461,7 @@ const ApprovalDesk = () => {
         // Use only real data from database
         setReports(transformedReports);
       } else {
-        setReports([]); // Tidak ada fallback ke mockDetailedReports
+        setReports([]);
       }
     } catch (error) {
       console.error('Error in fetchReports:', error);
@@ -494,6 +500,92 @@ const ApprovalDesk = () => {
     }
   };
 
+  const handleBulkAction = (action: 'approve' | 'reject') => {
+    if (selectedReports.length === 0) {
+      toast({
+        title: "Error",
+        description: "Pilih minimal satu laporan untuk diproses.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setBulkAction(action);
+    setBulkActionModalOpen(true);
+    setBulkNotes("");
+    setBulkReason("");
+  };
+
+  const handleExecuteBulkAction = async () => {
+    if (!bulkAction || selectedReports.length === 0) return;
+
+    if (bulkAction === 'reject' && !bulkReason.trim()) {
+      toast({
+        title: "Error",
+        description: "Alasan penolakan harus diisi.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setProcessingBulk(true);
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (const reportId of selectedReports) {
+        try {
+          if (bulkAction === 'approve') {
+            await handleApprove(reportId, bulkNotes || undefined);
+          } else {
+            await handleReject(reportId, bulkReason);
+          }
+          successCount++;
+        } catch (error) {
+          errorCount++;
+          errors.push(`Report ${reportId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // Show results
+      if (successCount > 0) {
+        toast({
+          title: "Bulk Action Berhasil",
+          description: `${successCount} laporan berhasil ${bulkAction === 'approve' ? 'disetujui' : 'ditolak'}.${errorCount > 0 ? ` ${errorCount} laporan gagal diproses.` : ''}`,
+        });
+      }
+
+      if (errorCount > 0) {
+        console.error('Bulk action errors:', errors);
+        toast({
+          title: "Beberapa Laporan Gagal Diproses",
+          description: `${errorCount} laporan gagal diproses. Periksa console untuk detail.`,
+          variant: "destructive"
+        });
+      }
+
+      // Reset state and refresh data
+      setSelectedReports([]);
+      setBulkActionModalOpen(false);
+      setBulkAction(null);
+      setBulkNotes("");
+      setBulkReason("");
+      await fetchReports();
+
+    } catch (error) {
+      console.error('Bulk action error:', error);
+      toast({
+        title: "Error",
+        description: "Terjadi kesalahan saat memproses bulk action.",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessingBulk(false);
+    }
+  };
+
   const handleApprove = async (reportId: string, note?: string) => {
     try {
       // Get current session for authorization
@@ -529,20 +621,23 @@ const ApprovalDesk = () => {
           : report
       ));
       
-      toast({
-        title: "Laporan Disetujui",
-        description: "Laporan berhasil disetujui dan akan dilanjutkan ke proses kalkulasi skor",
-      });
+      if (!bulkAction) { // Only show individual toast if not part of bulk action
+        toast({
+          title: "Laporan Disetujui",
+          description: "Laporan berhasil disetujui dan akan dilanjutkan ke proses kalkulasi skor",
+        });
+      }
 
-      // Refresh data
-      await fetchReports();
     } catch (error: any) {
       console.error('Error approving report:', error);
-      toast({
-        title: "Error",
-        description: "Gagal menyetujui laporan: " + error.message,
-        variant: "destructive"
-      });
+      if (!bulkAction) { // Only show individual toast if not part of bulk action
+        toast({
+          title: "Error",
+          description: "Gagal menyetujui laporan: " + error.message,
+          variant: "destructive"
+        });
+      }
+      throw error; // Re-throw for bulk action error handling
     }
   };
 
@@ -581,32 +676,25 @@ const ApprovalDesk = () => {
           : report
       ));
       
-      toast({
-        title: "Laporan Ditolak", 
-        description: "Laporan telah ditolak dan tidak akan dilanjutkan ke proses kalkulasi",
-        variant: "destructive",
-      });
+      if (!bulkAction) { // Only show individual toast if not part of bulk action
+        toast({
+          title: "Laporan Ditolak", 
+          description: "Laporan telah ditolak dan tidak akan dilanjutkan ke proses kalkulasi",
+          variant: "destructive",
+        });
+      }
 
-      // Refresh data
-      await fetchReports();
     } catch (error: any) {
       console.error('Error rejecting report:', error);
-      toast({
-        title: "Error",
-        description: "Gagal menolak laporan: " + error.message,
-        variant: "destructive"
-      });
+      if (!bulkAction) { // Only show individual toast if not part of bulk action
+        toast({
+          title: "Error",
+          description: "Gagal menolak laporan: " + error.message,
+          variant: "destructive"
+        });
+      }
+      throw error; // Re-throw for bulk action error handling
     }
-  };
-
-  const handleBulkApprove = () => {
-    selectedReports.forEach(reportId => handleApprove(reportId));
-    setSelectedReports([]);
-    
-    toast({
-      title: "Bulk Approval Berhasil",
-      description: `${selectedReports.length} laporan berhasil disetujui`,
-    });
   };
 
   const sbuOptions = ["SBU Jawa Barat", "SBU Jawa Tengah", "SBU Jawa Timur", "SBU DKI Jakarta"];
@@ -630,10 +718,31 @@ const ApprovalDesk = () => {
             Export
           </Button>
           {selectedReports.length > 0 && (
-            <Button variant="hero" onClick={handleBulkApprove}>
-              Bulk Approve ({selectedReports.length})
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleBulkAction('approve')} 
+                disabled={processingBulk}
+              >
+                <Check className="mr-1 h-4 w-4" />
+                Setujui ({selectedReports.length})
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleBulkAction('reject')} 
+                disabled={processingBulk}
+              >
+                <X className="mr-1 h-4 w-4" />
+                Tolak ({selectedReports.length})
+              </Button>
+            </div>
           )}
+          <Button variant="outline" size="sm" onClick={fetchReports} disabled={isLoading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
       </div>
       
@@ -696,101 +805,200 @@ const ApprovalDesk = () => {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Laporan Menunggu Approval</CardTitle>
-              <CardDescription>{filteredReports.length} laporan memerlukan persetujuan</CardDescription>
+              <CardDescription>
+                {isLoading ? 'Memuat...' : `${filteredReports.length} laporan memerlukan persetujuan`}
+              </CardDescription>
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="select-all"
-                checked={filteredReports.length > 0 && selectedReports.length === filteredReports.length}
-                onCheckedChange={handleSelectAll}
-              />
-              <label htmlFor="select-all" className="text-sm">Pilih Semua</label>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredReports.map((report) => (
-              <div key={report.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50">
-                <div className="flex items-center space-x-4">
+            {filteredReports.length > 0 && (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center space-x-2">
                   <Checkbox
-                    checked={selectedReports.includes(report.id)}
-                    onCheckedChange={(checked) => handleSelectReport(report.id, checked as boolean)}
+                    id="select-all"
+                    checked={filteredReports.length > 0 && selectedReports.length === filteredReports.length}
+                    onCheckedChange={handleSelectAll}
                   />
-                  
-                  <div className="space-y-1">
-                    <p className="font-medium">{report.fileName}</p>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        {report.submittedBy}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span>•</span>
-                        <span>{report.sbu}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {report.submittedAt}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span>•</span>
-                        <span>{report.indicatorType}</span>
-                      </div>
-                    </div>
-                    <Badge className="bg-yellow-100 text-yellow-800">
-                      <Clock className="mr-1 h-3 w-3" />
-                      Menunggu Approval
-                    </Badge>
-                  </div>
+                  <Label htmlFor="select-all" className="text-sm font-medium">
+                    Pilih Semua ({filteredReports.length})
+                  </Label>
                 </div>
-                
-                <div className="flex gap-2">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Eye className="mr-1 h-3 w-3" />
-                        Review
-                      </Button>
-                    </DialogTrigger>
-                    <ReportDetail 
-                      report={report} 
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                    />
-                  </Dialog>
-                  
-                  <Button 
-                    variant="success" 
-                    size="sm"
-                    onClick={() => handleApprove(report.id)}
-                  >
-                    <Check className="mr-1 h-3 w-3" />
-                    Setujui
-                  </Button>
-                  
-                  <Button 
-                    variant="destructive" 
-                    size="sm"
-                    onClick={() => handleReject(report.id, "Ditolak melalui quick action")}
-                  >
-                    <X className="mr-1 h-3 w-3" />
-                    Tolak
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            {filteredReports.length === 0 && (
-              <div className="text-center py-12">
-                <CheckCircle2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">Tidak ada laporan pending</h3>
-                <p className="text-muted-foreground">Semua laporan telah diproses</p>
+                {selectedReports.length > 0 && (
+                  <Badge variant="secondary">{selectedReports.length} dipilih</Badge>
+                )}
               </div>
             )}
           </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center space-x-4 p-4 border rounded-lg">
+                  <div className="w-4 h-4 bg-muted animate-pulse rounded" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-muted animate-pulse rounded w-1/3" />
+                    <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+                  </div>
+                  <div className="w-20 h-6 bg-muted animate-pulse rounded" />
+                  <div className="w-24 h-8 bg-muted animate-pulse rounded" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredReports.map((report) => {
+                const isSelected = selectedReports.includes(report.id);
+                
+                return (
+                  <div key={report.id} className={`flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors ${isSelected ? 'bg-blue-50 border-blue-200' : ''}`}>
+                    <div className="flex items-center space-x-4">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => handleSelectReport(report.id, checked as boolean)}
+                      />
+                      
+                      <div className="space-y-1">
+                        <p className="font-medium">{report.fileName}</p>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            {report.submittedBy}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span>•</span>
+                            <span>{report.sbu}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {report.submittedAt}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span>•</span>
+                            <span>{report.indicatorType}</span>
+                          </div>
+                        </div>
+                        <Badge className="bg-yellow-100 text-yellow-800">
+                          <Clock className="mr-1 h-3 w-3" />
+                          Menunggu Approval
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Eye className="mr-1 h-3 w-3" />
+                            Review
+                          </Button>
+                        </DialogTrigger>
+                        <ReportDetail 
+                          report={report} 
+                          onApprove={handleApprove}
+                          onReject={handleReject}
+                        />
+                      </Dialog>
+                      
+                      <Button 
+                        variant="default" 
+                        size="sm"
+                        onClick={() => handleApprove(report.id)}
+                        disabled={processingBulk}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <Check className="mr-1 h-3 w-3" />
+                        Setujui
+                      </Button>
+                      
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={() => handleReject(report.id, "Ditolak melalui quick action")}
+                        disabled={processingBulk}
+                      >
+                        <X className="mr-1 h-3 w-3" />
+                        Tolak
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredReports.length === 0 && !isLoading && (
+                <div className="text-center py-12">
+                  <CheckCircle2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Tidak ada laporan pending</h3>
+                  <p className="text-muted-foreground">Semua laporan telah diproses</p>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Bulk Action Modal */}
+      <Dialog open={bulkActionModalOpen} onOpenChange={setBulkActionModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {bulkAction === 'approve' ? 'Setujui Laporan' : 'Tolak Laporan'}
+            </DialogTitle>
+            <DialogDescription>
+              Anda akan {bulkAction === 'approve' ? 'menyetujui' : 'menolak'} {selectedReports.length} laporan.
+              {bulkAction === 'reject' && ' Alasan penolakan harus diisi.'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {bulkAction === 'approve' ? (
+              <div className="space-y-2">
+                <Label htmlFor="bulk-notes">Catatan (Opsional)</Label>
+                <Textarea
+                  id="bulk-notes"
+                  placeholder="Tambahkan catatan untuk persetujuan..."
+                  value={bulkNotes}
+                  onChange={(e) => setBulkNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="bulk-reason">Alasan Penolakan *</Label>
+                <Textarea
+                  id="bulk-reason"
+                  placeholder="Berikan alasan mengapa laporan ditolak..."
+                  value={bulkReason}
+                  onChange={(e) => setBulkReason(e.target.value)}
+                  rows={3}
+                  required
+                />
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setBulkActionModalOpen(false)} disabled={processingBulk}>
+              Batal
+            </Button>
+            <Button 
+              onClick={handleExecuteBulkAction} 
+              disabled={processingBulk || (bulkAction === 'reject' && !bulkReason.trim())}
+              variant={bulkAction === 'approve' ? 'default' : 'destructive'}
+            >
+              {processingBulk ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Memproses...
+                </>
+              ) : (
+                <>
+                  {bulkAction === 'approve' ? <Check className="mr-2 h-4 w-4" /> : <X className="mr-2 h-4 w-4" />}
+                  {bulkAction === 'approve' ? 'Setujui' : 'Tolak'} ({selectedReports.length})
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

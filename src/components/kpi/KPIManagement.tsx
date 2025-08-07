@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Settings, Plus, Edit, Trash2, Target, Calculator, Percent, Save, X } from "lucide-react";
+import { Settings, Plus, Edit, Trash2, Target, Calculator, Percent, Save, X, Calendar, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,9 +20,12 @@ interface KPIDefinition {
   code: string;
   description?: string;
   target_value: number;
+  monthly_target?: number;
+  semester_target?: number;
   weight_percentage: number;
   unit?: string;
   calculation_type: 'count' | 'sum' | 'percentage';
+  scoring_period?: 'monthly' | 'semester';
   is_active: boolean;
 }
 
@@ -52,9 +55,12 @@ const KPIManagement = () => {
     code: '',
     description: '',
     target_value: 0,
+    monthly_target: 0,
+    semester_target: 0,
     weight_percentage: 0,
     unit: '',
-    calculation_type: 'count' as 'count' | 'sum' | 'percentage'
+    calculation_type: 'count' as 'count' | 'sum' | 'percentage',
+    scoring_period: 'semester' as 'monthly' | 'semester'
   });
 
   useEffect(() => {
@@ -100,15 +106,26 @@ const KPIManagement = () => {
     setSelectedKPIForRanges(kpi);
     const kpiRanges = scoringRanges.filter(range => range.kpi_id === kpi.id);
     
-    // If no ranges exist, create default ranges
+    // If no ranges exist, create default ranges based on scoring period
     if (kpiRanges.length === 0) {
-      setEditingRanges([
-        { id: 'temp-1', kpi_id: kpi.id, min_percentage: 0, max_percentage: 25, score_value: 1 },
-        { id: 'temp-2', kpi_id: kpi.id, min_percentage: 26, max_percentage: 50, score_value: 2 },
-        { id: 'temp-3', kpi_id: kpi.id, min_percentage: 51, max_percentage: 75, score_value: 3 },
-        { id: 'temp-4', kpi_id: kpi.id, min_percentage: 76, max_percentage: 100, score_value: 4 },
-        { id: 'temp-5', kpi_id: kpi.id, min_percentage: 101, max_percentage: 999, score_value: 5 }
-      ]);
+      if (kpi.scoring_period === 'semester') {
+        // Use semester-based weight ranges for new semester KPIs
+        setEditingRanges([
+          { id: 'temp-1', kpi_id: kpi.id, min_percentage: 0, max_percentage: 25, score_value: 1 },
+          { id: 'temp-2', kpi_id: kpi.id, min_percentage: 25, max_percentage: 50, score_value: 2 },
+          { id: 'temp-3', kpi_id: kpi.id, min_percentage: 50, max_percentage: 75, score_value: 3 },
+          { id: 'temp-4', kpi_id: kpi.id, min_percentage: 75, max_percentage: 100, score_value: 4 }
+        ]);
+      } else {
+        // Standard monthly ranges
+        setEditingRanges([
+          { id: 'temp-1', kpi_id: kpi.id, min_percentage: 0, max_percentage: 25, score_value: 1 },
+          { id: 'temp-2', kpi_id: kpi.id, min_percentage: 26, max_percentage: 50, score_value: 2 },
+          { id: 'temp-3', kpi_id: kpi.id, min_percentage: 51, max_percentage: 75, score_value: 3 },
+          { id: 'temp-4', kpi_id: kpi.id, min_percentage: 76, max_percentage: 100, score_value: 4 },
+          { id: 'temp-5', kpi_id: kpi.id, min_percentage: 101, max_percentage: 999, score_value: 5 }
+        ]);
+      }
     } else {
       setEditingRanges([...kpiRanges]);
     }
@@ -235,9 +252,23 @@ const KPIManagement = () => {
 
   const handleAddKPI = async () => {
     try {
+      // Validate that total weights don't exceed 100%
+      const totalWeight = kpis.reduce((sum, kpi) => sum + kpi.weight_percentage, 0) + newKPI.weight_percentage;
+      if (totalWeight > 100) {
+        toast({
+          title: "Error",
+          description: `Total bobot KPI akan melebihi 100% (${totalWeight}%). Silakan sesuaikan bobot.`,
+          variant: "destructive"
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('kpi_definitions')
-        .insert([newKPI]);
+        .insert([{
+          ...newKPI,
+          target_value: newKPI.scoring_period === 'semester' ? newKPI.semester_target : newKPI.monthly_target
+        }]);
 
       if (error) throw error;
 
@@ -251,9 +282,12 @@ const KPIManagement = () => {
         code: '',
         description: '',
         target_value: 0,
+        monthly_target: 0,
+        semester_target: 0,
         weight_percentage: 0,
         unit: '',
-        calculation_type: 'count'
+        calculation_type: 'count',
+        scoring_period: 'semester'
       });
       
       setIsAddKPIOpen(false);
@@ -276,10 +310,13 @@ const KPIManagement = () => {
         .update({
           name: selectedKPI.name,
           description: selectedKPI.description,
-          target_value: selectedKPI.target_value,
+          target_value: selectedKPI.scoring_period === 'semester' ? selectedKPI.semester_target : selectedKPI.monthly_target,
+          monthly_target: selectedKPI.monthly_target,
+          semester_target: selectedKPI.semester_target,
           weight_percentage: selectedKPI.weight_percentage,
           unit: selectedKPI.unit,
-          calculation_type: selectedKPI.calculation_type
+          calculation_type: selectedKPI.calculation_type,
+          scoring_period: selectedKPI.scoring_period
         })
         .eq('id', selectedKPI.id);
 
@@ -349,7 +386,7 @@ const KPIManagement = () => {
         <div>
           <h1 className="text-3xl font-bold">Manajemen KPI</h1>
           <p className="text-muted-foreground">
-            Kelola definisi KPI dan aturan scoring sistem
+            Kelola definisi KPI dan aturan scoring sistem (berbasis semester)
           </p>
         </div>
         
@@ -364,7 +401,7 @@ const KPIManagement = () => {
             <DialogHeader>
               <DialogTitle>Tambah KPI Baru</DialogTitle>
               <DialogDescription>
-                Buat definisi KPI baru untuk sistem penilaian
+                Buat definisi KPI baru untuk sistem penilaian berbasis semester
               </DialogDescription>
             </DialogHeader>
             
@@ -385,7 +422,7 @@ const KPIManagement = () => {
                   id="code"
                   value={newKPI.code}
                   onChange={(e) => setNewKPI({...newKPI, code: e.target.value})}
-                  placeholder="Contoh: media-sosial"
+                  placeholder="Contoh: PUBLIKASI_MEDSOS"
                 />
               </div>
               
@@ -399,17 +436,45 @@ const KPIManagement = () => {
                 />
               </div>
               
+              <div className="space-y-2">
+                <Label htmlFor="scoring_period">Periode Penilaian</Label>
+                <Select 
+                  value={newKPI.scoring_period} 
+                  onValueChange={(value: any) => setNewKPI({...newKPI, scoring_period: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="semester">Semester (6 bulan)</SelectItem>
+                    <SelectItem value="monthly">Bulanan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="target">Target</Label>
+                  <Label htmlFor="monthly_target">Target Bulanan</Label>
                   <Input
-                    id="target"
+                    id="monthly_target"
                     type="number"
-                    value={newKPI.target_value}
-                    onChange={(e) => setNewKPI({...newKPI, target_value: Number(e.target.value)})}
+                    value={newKPI.monthly_target}
+                    onChange={(e) => setNewKPI({...newKPI, monthly_target: Number(e.target.value)})}
                   />
                 </div>
                 
+                <div className="space-y-2">
+                  <Label htmlFor="semester_target">Target Semester</Label>
+                  <Input
+                    id="semester_target"
+                    type="number"
+                    value={newKPI.semester_target}
+                    onChange={(e) => setNewKPI({...newKPI, semester_target: Number(e.target.value)})}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="weight">Bobot (%)</Label>
                   <Input
@@ -421,9 +486,7 @@ const KPIManagement = () => {
                     onChange={(e) => setNewKPI({...newKPI, weight_percentage: Number(e.target.value)})}
                   />
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+                
                 <div className="space-y-2">
                   <Label htmlFor="unit">Satuan</Label>
                   <Input
@@ -433,23 +496,23 @@ const KPIManagement = () => {
                     placeholder="posts, artikel, dll"
                   />
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="calculation">Tipe Kalkulasi</Label>
-                  <Select 
-                    value={newKPI.calculation_type} 
-                    onValueChange={(value: any) => setNewKPI({...newKPI, calculation_type: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="count">Hitung (Count)</SelectItem>
-                      <SelectItem value="sum">Jumlah (Sum)</SelectItem>
-                      <SelectItem value="percentage">Persentase</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="calculation">Tipe Kalkulasi</Label>
+                <Select 
+                  value={newKPI.calculation_type} 
+                  onValueChange={(value: any) => setNewKPI({...newKPI, calculation_type: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="count">Hitung (Count)</SelectItem>
+                    <SelectItem value="sum">Jumlah (Sum)</SelectItem>
+                    <SelectItem value="percentage">Persentase</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             
@@ -482,7 +545,7 @@ const KPIManagement = () => {
                 Daftar KPI
               </CardTitle>
               <CardDescription>
-                Kelola definisi dan konfigurasi Key Performance Indicators
+                Kelola definisi dan konfigurasi Key Performance Indicators (Berbasis Semester)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -495,12 +558,24 @@ const KPIManagement = () => {
                         <Badge variant={kpi.is_active ? "default" : "secondary"}>
                           {kpi.is_active ? "Aktif" : "Nonaktif"}
                         </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {kpi.scoring_period === 'semester' ? (
+                            <><Calendar className="w-3 h-3 mr-1" />Semester</>
+                          ) : (
+                            <><TrendingUp className="w-3 h-3 mr-1" />Bulanan</>
+                          )}
+                        </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {kpi.description || 'Tidak ada deskripsi'}
                       </p>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>Target: {kpi.target_value.toLocaleString()} {kpi.unit}</span>
+                        {kpi.monthly_target && (
+                          <span>Target Bulanan: {kpi.monthly_target.toLocaleString()} {kpi.unit}</span>
+                        )}
+                        {kpi.semester_target && (
+                          <span>Target Semester: {kpi.semester_target.toLocaleString()} {kpi.unit}</span>
+                        )}
                         <span>Bobot: {kpi.weight_percentage}%</span>
                         <span>Tipe: {kpi.calculation_type}</span>
                       </div>
@@ -572,6 +647,7 @@ const KPIManagement = () => {
             <CardContent className="space-y-6">
               {kpis.map((kpi) => {
                 const ranges = scoringRanges.filter(range => range.kpi_id === kpi.id);
+                const displayTarget = kpi.scoring_period === 'semester' ? kpi.semester_target : kpi.target_value;
                 
                 return (
                   <div key={kpi.id} className="border rounded-lg p-4">
@@ -579,8 +655,13 @@ const KPIManagement = () => {
                       <div>
                         <h3 className="font-semibold">{kpi.name}</h3>
                         <p className="text-sm text-muted-foreground">
-                          Target: {kpi.target_value.toLocaleString()} {kpi.unit} | Bobot: {kpi.weight_percentage}%
+                          Target {kpi.scoring_period === 'semester' ? 'Semester' : 'Bulanan'}: {displayTarget?.toLocaleString()} {kpi.unit} | Bobot: {kpi.weight_percentage}%
                         </p>
+                        {kpi.scoring_period === 'semester' && kpi.monthly_target && (
+                          <p className="text-xs text-muted-foreground">
+                            Target Bulanan: {kpi.monthly_target.toLocaleString()} {kpi.unit}
+                          </p>
+                        )}
                       </div>
                       <Button 
                         variant="outline" 
@@ -596,7 +677,7 @@ const KPIManagement = () => {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Rentang Pencapaian</TableHead>
-                          <TableHead>Nilai Skor</TableHead>
+                          <TableHead>Nilai Skor/Bobot</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -657,17 +738,45 @@ const KPIManagement = () => {
                 />
               </div>
               
+              <div className="space-y-2">
+                <Label htmlFor="edit-scoring_period">Periode Penilaian</Label>
+                <Select 
+                  value={selectedKPI.scoring_period} 
+                  onValueChange={(value: any) => setSelectedKPI({...selectedKPI, scoring_period: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="semester">Semester (6 bulan)</SelectItem>
+                    <SelectItem value="monthly">Bulanan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-target">Target</Label>
+                  <Label htmlFor="edit-monthly_target">Target Bulanan</Label>
                   <Input
-                    id="edit-target"
+                    id="edit-monthly_target"
                     type="number"
-                    value={selectedKPI.target_value}
-                    onChange={(e) => setSelectedKPI({...selectedKPI, target_value: Number(e.target.value)})}
+                    value={selectedKPI.monthly_target || 0}
+                    onChange={(e) => setSelectedKPI({...selectedKPI, monthly_target: Number(e.target.value)})}
                   />
                 </div>
                 
+                <div className="space-y-2">
+                  <Label htmlFor="edit-semester_target">Target Semester</Label>
+                  <Input
+                    id="edit-semester_target"
+                    type="number"
+                    value={selectedKPI.semester_target || 0}
+                    onChange={(e) => setSelectedKPI({...selectedKPI, semester_target: Number(e.target.value)})}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="edit-weight">Bobot (%)</Label>
                   <Input
@@ -679,9 +788,7 @@ const KPIManagement = () => {
                     onChange={(e) => setSelectedKPI({...selectedKPI, weight_percentage: Number(e.target.value)})}
                   />
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+                
                 <div className="space-y-2">
                   <Label htmlFor="edit-unit">Satuan</Label>
                   <Input
@@ -690,23 +797,23 @@ const KPIManagement = () => {
                     onChange={(e) => setSelectedKPI({...selectedKPI, unit: e.target.value})}
                   />
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="edit-calculation">Tipe Kalkulasi</Label>
-                  <Select 
-                    value={selectedKPI.calculation_type} 
-                    onValueChange={(value: any) => setSelectedKPI({...selectedKPI, calculation_type: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="count">Hitung (Count)</SelectItem>
-                      <SelectItem value="sum">Jumlah (Sum)</SelectItem>
-                      <SelectItem value="percentage">Persentase</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="edit-calculation">Tipe Kalkulasi</Label>
+                <Select 
+                  value={selectedKPI.calculation_type} 
+                  onValueChange={(value: any) => setSelectedKPI({...selectedKPI, calculation_type: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="count">Hitung (Count)</SelectItem>
+                    <SelectItem value="sum">Jumlah (Sum)</SelectItem>
+                    <SelectItem value="percentage">Persentase</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
@@ -730,6 +837,11 @@ const KPIManagement = () => {
             <DialogTitle>Edit Rentang Scoring</DialogTitle>
             <DialogDescription>
               Atur rentang pencapaian dan nilai skor untuk KPI: {selectedKPIForRanges?.name}
+              {selectedKPIForRanges?.scoring_period === 'semester' && (
+                <span className="block text-sm text-blue-600 mt-1">
+                  ⓘ KPI berbasis semester - nilai skor akan digunakan sebagai bobot final
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           
@@ -756,11 +868,13 @@ const KPIManagement = () => {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Skor</Label>
+                    <Label className="text-xs">
+                      {selectedKPIForRanges?.scoring_period === 'semester' ? 'Bobot' : 'Skor'}
+                    </Label>
                     <Input
                       type="number"
                       min="1"
-                      max="5"
+                      max={selectedKPIForRanges?.scoring_period === 'semester' ? "50" : "5"}
                       value={range.score_value}
                       onChange={(e) => handleUpdateRange(index, 'score_value', Number(e.target.value))}
                       className="h-8"
