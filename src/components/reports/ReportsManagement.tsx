@@ -26,12 +26,13 @@ import {
   RefreshCw,
   Settings,
   Check,
-  X
+  X,
+  Activity
 } from "lucide-react";
 import ReportDetailModal from "./ReportDetailModal";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { useReports, useReportActions, Report } from "@/hooks/useReports";
+import { useReports, useReportActions, Report, ReportFilter } from "@/hooks/useReports";
 import { supabase } from "@/integrations/supabase/client";
 import { exportReport, generateReportFileName, formatReportData } from '@/lib/report-export';
 import { createApprovalNotification } from '@/hooks/useNotifications';
@@ -56,77 +57,74 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
   const [bulkNotes, setBulkNotes] = useState("");
   const [bulkReason, setBulkReason] = useState("");
   const [processingBulk, setProcessingBulk] = useState(false);
+  const [filters, setFilters] = useState<ReportFilter>({});
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [availableSBUs, setAvailableSBUs] = useState<string[]>([]);
+  const [availableIndicatorTypes, setAvailableIndicatorTypes] = useState<string[]>([]);
+
+  // Get current user ID
+  const [userId, setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
+    };
+    getCurrentUser();
+  }, []);
   
-  const { toast } = useToast();
-  const navigate = useNavigate();
+  const { 
+    reports, 
+    loading, 
+    error, 
+    totalCount,
+    periods,
+    getAvailableYears,
+    getAvailableSBUs,
+    getAvailableIndicatorTypes,
+    canModifyReport,
+    refetch 
+  } = useReports(userRole, userId || undefined, filters);
 
-  // Use propUserId if provided, otherwise get from auth
-  const userId = propUserId || null;
-
-  // Fetch data using hooks
-  const { reports, loading, error, refetch } = useReports(userRole, userId || undefined, currentSBU);
   const { approveReport, rejectReport, loading: actionLoading } = useReportActions();
 
-  // Get unique indicator types from reports
+  // Fetch filter options
   useEffect(() => {
-    const types = Array.from(new Set(reports.map(report => report.indicatorType).filter(Boolean)));
-    setIndicatorTypes(types);
-  }, [reports]);
+    const fetchFilterOptions = async () => {
+      const years = await getAvailableYears();
+      const sbus = await getAvailableSBUs();
+      const types = await getAvailableIndicatorTypes();
+      setAvailableYears(years);
+      setAvailableSBUs(sbus);
+      setAvailableIndicatorTypes(types);
+    };
 
-  // Filter reports based on search and filters
-  const filteredReports = reports.filter(report => {
-    // Apply search filter
-    if (searchTerm && !report.fileName.toLowerCase().includes(searchTerm.toLowerCase()) && 
-        !report.submittedBy.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-    
-    // Apply status filter
-    if (statusFilter !== "all" && report.status !== statusFilter) return false;
-    
-    // Apply indicator type filter
-    if (indicatorFilter !== "all" && report.indicatorType !== indicatorFilter) return false;
-    
-    return true;
-  });
+    fetchFilterOptions();
+  }, [getAvailableYears, getAvailableSBUs, getAvailableIndicatorTypes]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Badge className="bg-blue-100 text-blue-800"><CheckCircle className="mr-1 h-3 w-3" />Selesai</Badge>;
-      case 'approved':
-        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3" />Disetujui Admin</Badge>;
-      case 'rejected':
-        return <Badge className="bg-red-100 text-red-800"><XCircle className="mr-1 h-3 w-3" />Ditolak Admin</Badge>;
-      case 'system_rejected':
-        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Ditolak Sistem</Badge>;
-      case 'pending':
-      case 'pending_approval':
-        return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="mr-1 h-3 w-3" />Pending</Badge>;
-      case 'processing':
-        return <Badge className="bg-blue-100 text-blue-800"><TrendingUp className="mr-1 h-3 w-3" />Diproses</Badge>;
-      case 'failed':
-        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Gagal</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
+  const handleFilterChange = (key: keyof ReportFilter, value: any) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
   };
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      // Only select reports that can be bulk processed (pending approval)
-      const selectableReports = filteredReports
-        .filter(report => report.status === 'pending_approval')
-        .map(report => report.id);
-      setSelectedReports(selectableReports);
-    } else {
+  const clearFilters = () => {
+    setFilters({});
+  };
+
+  const handleSelectReport = (reportId: string) => {
+    setSelectedReports(prev => 
+      prev.includes(reportId) 
+        ? prev.filter(id => id !== reportId)
+        : [...prev, reportId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedReports.length === reports.length) {
       setSelectedReports([]);
-    }
-  };
-
-  const handleSelectReport = (reportId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedReports([...selectedReports, reportId]);
     } else {
-      setSelectedReports(selectedReports.filter(id => id !== reportId));
+      setSelectedReports(reports.map(r => r.id));
     }
   };
 
@@ -431,6 +429,88 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
     }
   };
 
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  // Use propUserId if provided, otherwise get from auth
+  // const userId = propUserId || null; // This line is now handled by the useEffect hook
+
+  // Fetch data using hooks
+  // const { reports, loading, error, refetch } = useReports(userRole, userId || undefined, currentSBU); // This line is now handled by the useReports hook
+  // const { approveReport, rejectReport, loading: actionLoading } = useReportActions(); // This line is now handled by the useReportActions hook
+
+  // Get unique indicator types from reports
+  useEffect(() => {
+    const types = Array.from(new Set(reports.map(report => report.indicatorType).filter(Boolean)));
+    setIndicatorTypes(types);
+  }, [reports]);
+
+  // Filter reports based on search and filters
+  const filteredReports = reports.filter(report => {
+    // Apply search filter
+    if (searchTerm && !report.fileName.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !report.submittedBy.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    
+    // Apply status filter
+    if (statusFilter !== "all" && report.status !== statusFilter) return false;
+    
+    // Apply indicator type filter
+    if (indicatorFilter !== "all" && report.indicatorType !== indicatorFilter) return false;
+    
+    return true;
+  });
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <Badge className="bg-blue-100 text-blue-800"><CheckCircle className="mr-1 h-3 w-3" />Selesai</Badge>;
+      case 'approved':
+        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3" />Disetujui Admin</Badge>;
+      case 'rejected':
+        return <Badge className="bg-red-100 text-red-800"><XCircle className="mr-1 h-3 w-3" />Ditolak Admin</Badge>;
+      case 'system_rejected':
+        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Ditolak Sistem</Badge>;
+      case 'pending':
+      case 'pending_approval':
+        return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="mr-1 h-3 w-3" />Pending</Badge>;
+      case 'processing':
+        return <Badge className="bg-blue-100 text-blue-800"><TrendingUp className="mr-1 h-3 w-3" />Diproses</Badge>;
+      case 'failed':
+        return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Gagal</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors = {
+      'approved': 'bg-green-100 text-green-800',
+      'completed': 'bg-blue-100 text-blue-800',
+      'pending_approval': 'bg-yellow-100 text-yellow-800',
+      'processing': 'bg-purple-100 text-purple-800',
+      'rejected': 'bg-red-100 text-red-800',
+      'failed': 'bg-gray-100 text-gray-800'
+    };
+    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'approved':
+      case 'completed':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'rejected':
+      case 'failed':
+        return <XCircle className="h-4 w-4" />;
+      case 'pending_approval':
+        return <Clock className="h-4 w-4" />;
+      case 'processing':
+        return <Activity className="h-4 w-4" />;
+      default:
+        return <FileText className="h-4 w-4" />;
+    }
+  };
+
   if (error) {
     return (
       <div className="space-y-6">
@@ -438,7 +518,7 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
           <FileText className="mx-auto h-12 w-12 mb-4 opacity-50 text-destructive" />
           <h3 className="text-lg font-semibold text-destructive">Error Memuat Data</h3>
           <p className="text-muted-foreground mb-4">{error}</p>
-          <Button onClick={refetch}>
+          <Button onClick={handleRefreshData}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Coba Lagi
           </Button>
@@ -620,7 +700,7 @@ const ReportsManagement = ({ userRole, currentSBU, userId: propUserId }: Reports
                     {canSelect && (
                       <Checkbox 
                         checked={isSelected}
-                        onCheckedChange={(checked) => handleSelectReport(report.id, checked as boolean)}
+                        onCheckedChange={(checked) => handleSelectReport(report.id)}
                       />
                     )}
                     

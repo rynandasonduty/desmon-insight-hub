@@ -393,3 +393,265 @@ CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_category ON notifications(category);
 CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);
+
+-- Create report_periods table for tracking reporting periods
+CREATE TABLE IF NOT EXISTS report_periods (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  period_type TEXT NOT NULL CHECK (period_type IN ('monthly', 'semester', 'yearly')),
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  period_name TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE (period_type, period_start, period_end)
+);
+CREATE INDEX IF NOT EXISTS idx_report_periods_period_type ON report_periods(period_type);
+CREATE INDEX IF NOT EXISTS idx_report_periods_period_start ON report_periods(period_start);
+CREATE INDEX IF NOT EXISTS idx_report_periods_period_end ON report_periods(period_end);
+
+-- Create report_versions table for data immutability
+CREATE TABLE IF NOT EXISTS report_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  report_id UUID NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  version_number INTEGER NOT NULL,
+  kpi_version_id UUID REFERENCES kpi_definitions(id),
+  scoring_rules JSONB NOT NULL,
+  raw_data JSONB NOT NULL,
+  processed_data JSONB,
+  calculated_score DECIMAL,
+  achievement_percentage DECIMAL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id),
+  UNIQUE (report_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS idx_report_versions_report_id ON report_versions(report_id);
+CREATE INDEX IF NOT EXISTS idx_report_versions_kpi_version_id ON report_versions(kpi_version_id);
+CREATE INDEX IF NOT EXISTS idx_report_versions_created_at ON report_versions(created_at);
+
+-- Create kpi_versions table for tracking KPI changes over time
+CREATE TABLE IF NOT EXISTS kpi_versions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kpi_id UUID NOT NULL REFERENCES kpi_definitions(id) ON DELETE CASCADE,
+  version_number INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  code TEXT NOT NULL,
+  description TEXT,
+  target_value DECIMAL,
+  monthly_target DECIMAL,
+  semester_target DECIMAL,
+  weight_percentage DECIMAL,
+  unit TEXT,
+  calculation_type TEXT,
+  scoring_period TEXT,
+  is_active BOOLEAN,
+  scoring_ranges JSONB,
+  valid_from DATE NOT NULL,
+  valid_to DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  created_by UUID REFERENCES auth.users(id),
+  UNIQUE (kpi_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS idx_kpi_versions_kpi_id ON kpi_versions(kpi_id);
+CREATE INDEX IF NOT EXISTS idx_kpi_versions_valid_from ON kpi_versions(valid_from);
+CREATE INDEX IF NOT EXISTS idx_kpi_versions_valid_to ON kpi_versions(valid_to);
+
+-- Add period tracking to reports table
+ALTER TABLE reports 
+ADD COLUMN IF NOT EXISTS report_period_id UUID REFERENCES report_periods(id),
+ADD COLUMN IF NOT EXISTS reporting_month INTEGER,
+ADD COLUMN IF NOT EXISTS reporting_year INTEGER,
+ADD COLUMN IF NOT EXISTS reporting_semester INTEGER,
+ADD COLUMN IF NOT EXISTS kpi_version_id UUID REFERENCES kpi_versions(id),
+ADD COLUMN IF NOT EXISTS is_immutable BOOLEAN DEFAULT false;
+
+-- Create indexes for period-based queries
+CREATE INDEX IF NOT EXISTS idx_reports_period_id ON reports(report_period_id);
+CREATE INDEX IF NOT EXISTS idx_reports_reporting_month ON reports(reporting_month);
+CREATE INDEX IF NOT EXISTS idx_reports_reporting_year ON reports(reporting_year);
+CREATE INDEX IF NOT EXISTS idx_reports_reporting_semester ON reports(reporting_semester);
+CREATE INDEX IF NOT EXISTS idx_reports_kpi_version_id ON reports(kpi_version_id);
+
+-- Add period tracking to leaderboard_history
+ALTER TABLE leaderboard_history 
+ADD COLUMN IF NOT EXISTS period_type TEXT CHECK (period_type IN ('monthly', 'semester', 'yearly')),
+ADD COLUMN IF NOT EXISTS period_name TEXT;
+
+-- Create analytics_summary table for enhanced analytics
+CREATE TABLE IF NOT EXISTS analytics_summary (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  period_type TEXT NOT NULL CHECK (period_type IN ('monthly', 'semester', 'yearly')),
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  period_name TEXT NOT NULL,
+  total_reports INTEGER DEFAULT 0,
+  approved_reports INTEGER DEFAULT 0,
+  rejected_reports INTEGER DEFAULT 0,
+  pending_reports INTEGER DEFAULT 0,
+  average_score DECIMAL DEFAULT 0,
+  total_sbu_count INTEGER DEFAULT 0,
+  active_sbu_count INTEGER DEFAULT 0,
+  kpi_achievements JSONB,
+  trend_data JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE (period_type, period_start, period_end)
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_summary_period_type ON analytics_summary(period_type);
+CREATE INDEX IF NOT EXISTS idx_analytics_summary_period_start ON analytics_summary(period_start);
+CREATE INDEX IF NOT EXISTS idx_analytics_summary_period_end ON analytics_summary(period_end);
+
+-- Create function to automatically set report period
+CREATE OR REPLACE FUNCTION set_report_period()
+RETURNS TRIGGER AS $$
+DECLARE
+  current_period_id UUID;
+  current_month INTEGER;
+  current_year INTEGER;
+  current_semester INTEGER;
+BEGIN
+  -- Get current date components
+  current_month := EXTRACT(MONTH FROM CURRENT_DATE);
+  current_year := EXTRACT(YEAR FROM CURRENT_DATE);
+  current_semester := CASE 
+    WHEN current_month <= 6 THEN 1 
+    ELSE 2 
+  END;
+
+  -- Set reporting period fields
+  NEW.reporting_month := current_month;
+  NEW.reporting_year := current_year;
+  NEW.reporting_semester := current_semester;
+
+  -- Find or create current period
+  SELECT id INTO current_period_id
+  FROM report_periods 
+  WHERE period_type = 'monthly' 
+    AND period_start <= CURRENT_DATE 
+    AND period_end >= CURRENT_DATE
+    AND is_active = true
+  LIMIT 1;
+
+  IF current_period_id IS NULL THEN
+    -- Create new monthly period if not exists
+    INSERT INTO report_periods (period_type, period_start, period_end, period_name)
+    VALUES (
+      'monthly',
+      DATE_TRUNC('month', CURRENT_DATE),
+      DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 day',
+      TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+    )
+    RETURNING id INTO current_period_id;
+  END IF;
+
+  NEW.report_period_id := current_period_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to automatically set report period
+DROP TRIGGER IF EXISTS trigger_set_report_period ON reports;
+CREATE TRIGGER trigger_set_report_period
+  BEFORE INSERT ON reports
+  FOR EACH ROW
+  EXECUTE FUNCTION set_report_period();
+
+-- Create function to make reports immutable after approval
+CREATE OR REPLACE FUNCTION make_report_immutable()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- If status changed to approved or completed, make report immutable
+  IF (NEW.status = 'approved' OR NEW.status = 'completed') AND OLD.status != NEW.status THEN
+    NEW.is_immutable := true;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to make reports immutable
+DROP TRIGGER IF EXISTS trigger_make_report_immutable ON reports;
+CREATE TRIGGER trigger_make_report_immutable
+  BEFORE UPDATE ON reports
+  FOR EACH ROW
+  EXECUTE FUNCTION make_report_immutable();
+
+-- Create function to update analytics summary
+CREATE OR REPLACE FUNCTION update_analytics_summary()
+RETURNS TRIGGER AS $$
+DECLARE
+  period_id UUID;
+  period_type TEXT;
+  period_start DATE;
+  period_end DATE;
+  period_name TEXT;
+BEGIN
+  -- Get period information
+  SELECT rp.period_type, rp.period_start, rp.period_end, rp.period_name
+  INTO period_type, period_start, period_end, period_name
+  FROM report_periods rp
+  WHERE rp.id = NEW.report_period_id;
+
+  -- Insert or update analytics summary
+  INSERT INTO analytics_summary (
+    period_type, period_start, period_end, period_name,
+    total_reports, approved_reports, rejected_reports, pending_reports,
+    average_score, total_sbu_count, active_sbu_count,
+    updated_at
+  )
+  SELECT 
+    period_type,
+    period_start,
+    period_end,
+    period_name,
+    COUNT(*) as total_reports,
+    COUNT(*) FILTER (WHERE status = 'approved' OR status = 'completed') as approved_reports,
+    COUNT(*) FILTER (WHERE status = 'rejected') as rejected_reports,
+    COUNT(*) FILTER (WHERE status = 'pending_approval' OR status = 'processing') as pending_reports,
+    AVG(calculated_score) as average_score,
+    COUNT(DISTINCT user_id) as total_sbu_count,
+    COUNT(DISTINCT user_id) FILTER (WHERE status IN ('approved', 'completed', 'pending_approval')) as active_sbu_count,
+    NOW() as updated_at
+  FROM reports r
+  WHERE r.report_period_id = NEW.report_period_id
+  GROUP BY period_type, period_start, period_end, period_name
+  ON CONFLICT (period_type, period_start, period_end)
+  DO UPDATE SET
+    total_reports = EXCLUDED.total_reports,
+    approved_reports = EXCLUDED.approved_reports,
+    rejected_reports = EXCLUDED.rejected_reports,
+    pending_reports = EXCLUDED.pending_reports,
+    average_score = EXCLUDED.average_score,
+    total_sbu_count = EXCLUDED.total_sbu_count,
+    active_sbu_count = EXCLUDED.active_sbu_count,
+    updated_at = EXCLUDED.updated_at;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to update analytics summary
+DROP TRIGGER IF EXISTS trigger_update_analytics_summary ON reports;
+CREATE TRIGGER trigger_update_analytics_summary
+  AFTER INSERT OR UPDATE ON reports
+  FOR EACH ROW
+  EXECUTE FUNCTION update_analytics_summary();
+
+-- Initialize default periods for current year
+INSERT INTO report_periods (period_type, period_start, period_end, period_name)
+SELECT 
+  'monthly',
+  DATE_TRUNC('month', date_series),
+  DATE_TRUNC('month', date_series) + INTERVAL '1 month' - INTERVAL '1 day',
+  TO_CHAR(date_series, 'YYYY-MM')
+FROM generate_series(
+  DATE_TRUNC('year', CURRENT_DATE),
+  DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '11 months',
+  INTERVAL '1 month'
+) AS date_series
+ON CONFLICT (period_type, period_start, period_end) DO NOTHING;
+
+-- Initialize semester periods for current year
+INSERT INTO report_periods (period_type, period_start, period_end, period_name)
+VALUES 
+  ('semester', DATE_TRUNC('year', CURRENT_DATE), DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '5 months' + INTERVAL '1 month' - INTERVAL '1 day', CONCAT(EXTRACT(YEAR FROM CURRENT_DATE), '-S1')),
+  ('semester', DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '6 months', DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '11 months' + INTERVAL '1 month' - INTERVAL '1 day', CONCAT(EXTRACT(YEAR FROM CURRENT_DATE), '-S2'))
+ON CONFLICT (period_type, period_start, period_end) DO NOTHING;
