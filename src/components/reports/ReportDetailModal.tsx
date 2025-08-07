@@ -48,20 +48,20 @@ interface ScoringDetail {
 
 interface ReportDetailModalProps {
   report: Report | null;
-  isOpen: boolean;
+  open: boolean;
   onClose: () => void;
-  onApprove?: (reportId: string) => Promise<void>;
+  onApprove?: (reportId: string, notes?: string) => Promise<void>;
   onReject?: (reportId: string, reason: string) => Promise<void>;
-  userRole?: 'admin' | 'sbu';
+  loading?: boolean;
 }
 
 const ReportDetailModal = ({ 
   report, 
-  isOpen, 
+  open, 
   onClose, 
   onApprove, 
   onReject, 
-  userRole = 'sbu' 
+  loading: isProcessing = false
 }: ReportDetailModalProps) => {
   const [processedItems, setProcessedItems] = useState<ProcessedMediaItem[]>([]);
   const [scoringDetails, setScoringDetails] = useState<ScoringDetail[]>([]);
@@ -69,10 +69,10 @@ const ReportDetailModal = ({
   const [rejectionReason, setRejectionReason] = useState("");
 
   useEffect(() => {
-    if (report && isOpen) {
+    if (report && open) {
       fetchReportDetails();
     }
-  }, [report, isOpen]);
+  }, [report, open]);
 
   const fetchReportDetails = async () => {
     if (!report) return;
@@ -146,7 +146,7 @@ const ReportDetailModal = ({
 
   const handleApprove = async () => {
     if (onApprove && report) {
-      await onApprove(report.id);
+      await onApprove(report.id, "Approved via detail modal");
       onClose();
     }
   };
@@ -175,7 +175,7 @@ const ReportDetailModal = ({
   const invalidItems = processedItems.filter(item => !item.is_valid).length;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -465,7 +465,7 @@ const ReportDetailModal = ({
           </Tabs>
 
           {/* Admin Actions */}
-          {userRole === 'admin' && report.status === 'pending_approval' && (
+                      {onApprove && onReject && report.status === 'pending_approval' && (
             <Card className="border-yellow-200 bg-yellow-50">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -481,6 +481,7 @@ const ReportDetailModal = ({
                   <Button 
                     onClick={handleApprove} 
                     className="bg-green-600 hover:bg-green-700"
+                    disabled={isProcessing}
                   >
                     <CheckCircle className="mr-1 h-4 w-4" />
                     Setujui
@@ -488,7 +489,7 @@ const ReportDetailModal = ({
                   <Button 
                     variant="destructive" 
                     onClick={handleReject}
-                    disabled={!rejectionReason.trim()}
+                    disabled={!rejectionReason.trim() || isProcessing}
                   >
                     <XCircle className="mr-1 h-4 w-4" />
                     Tolak

@@ -210,7 +210,7 @@ BEGIN
   FROM (
     SELECT 
       media_type, 
-      SUM(COUNT(*)) as total_count
+      COUNT(*) as total_count
     FROM processed_media_items pmi
     INNER JOIN reports r ON pmi.report_id = r.id
     WHERE r.status = 'completed' 
