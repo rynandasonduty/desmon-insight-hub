@@ -71,15 +71,15 @@ export const EXCEL_TEMPLATES: ExcelTemplate[] = [
     description: 'Template untuk laporan skoring publikasi media massa dengan berbagai jenis media',
     fileName: 'SKORING_PUBLIKASI_MEDIA.xlsx',
     columns: [
-      'Link Berita Media Online', 'Link Media Sosial', 'Monitoring Radio', 
+      'Link Media Sosial', 'Link Media Online', 'Monitoring Radio', 
       'Monitoring Media cetak', 'Monitoring Running Text', 'Monitoring Siaran TV'
     ],
-    requiredColumns: ['Link Berita Media Online'],
-    optionalColumns: ['Link Media Sosial', 'Monitoring Radio', 'Monitoring Media cetak', 'Monitoring Running Text', 'Monitoring Siaran TV'],
+    requiredColumns: [], // No required columns for flexible validation
+    optionalColumns: ['Link Media Sosial', 'Link Media Online', 'Monitoring Radio', 'Monitoring Media cetak', 'Monitoring Running Text', 'Monitoring Siaran TV'],
     sampleData: [
       {
-        'Link Berita Media Online': 'https://pelayananpublik.id/2025/05/23/tingkatkan-layanan-internet-pln-icon-plus-sumbagut-komitmen-lakukan-perbaikan-dan-peningkatan-jaringan-fiber-optic/',
         'Link Media Sosial': 'https://www.instagram.com/p/DKSAWthwXZ/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==',
+        'Link Media Online': 'https://pelayananpublik.id/2025/05/23/tingkatkan-layanan-internet-pln-icon-plus-sumbagut-komitmen-lakukan-perbaikan-dan-peningkatan-jaringan-fiber-optic/',
         'Monitoring Radio': 'https://drive.google.com/file/d/1PzHzxRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link',
         'Monitoring Media cetak': 'https://drive.google.com/file/d/1Qz4F5xRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link',
         'Monitoring Running Text': 'https://drive.google.com/file/d/1Rz6G7xRbcUlR2Y67AkgRcnguJutmtZMar/view?usp=drive_link',
