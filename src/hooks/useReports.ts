@@ -134,7 +134,66 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
       //   query = query.in('profiles.sbu_name', filters.sbu);
       // }
 
-      const { data, error: fetchError, count } = await query;
+      let { data, error: fetchError, count } = await query;
+
+      // If file_size column doesn't exist, retry without it
+      if (fetchError && fetchError.code === '42703' && fetchError.message?.includes('file_size')) {
+        console.log('file_size column not found, retrying without it...');
+        query = supabase
+          .from('reports')
+          .select(`
+            id,
+            file_name,
+            status,
+            indicator_type,
+            raw_data,
+            processed_data,
+            calculated_score,
+            video_links,
+            rejection_reason,
+            created_at,
+            updated_at,
+            approved_at,
+            report_period_id,
+            reporting_month,
+            reporting_year,
+            reporting_semester,
+            kpi_version_id,
+            is_immutable,
+            user_id,
+            file_path,
+            profiles!reports_user_id_fkey (
+              full_name,
+              sbu_name
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        // Re-apply all filters
+        if (userRole === 'sbu' && userId) {
+          query = query.eq('user_id', userId);
+        }
+        if (filters?.year) {
+          query = query.eq('reporting_year', filters.year);
+        }
+        if (filters?.month) {
+          query = query.eq('reporting_month', filters.month);
+        }
+        if (filters?.semester) {
+          query = query.eq('reporting_semester', filters.semester);
+        }
+        if (filters?.status && filters.status.length > 0) {
+          query = query.in('status', filters.status);
+        }
+        if (filters?.indicatorType && filters.indicatorType.length > 0) {
+          query = query.in('indicator_type', filters.indicatorType);
+        }
+
+        const result = await query;
+        data = result.data;
+        fetchError = result.error;
+        count = result.count;
+      }
 
       if (fetchError) throw fetchError;
 
@@ -150,7 +209,7 @@ export const useReports = (userRole: 'admin' | 'sbu', userId?: string, filters?:
         rawData: report.raw_data,
         processedData: report.processed_data,
         calculatedScore: report.calculated_score,
-        fileSize: formatFileSize(report.file_size || 0),
+        fileSize: formatFileSize(report.file_size || report.raw_data?.fileSize || 0),
         videoLinks: report.video_links || [],
         rejectionReason: report.rejection_reason,
         filePath: report.file_path,
