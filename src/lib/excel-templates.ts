@@ -1,20 +1,15 @@
 /**
  * Excel Template Management for DASHMON
- * 
- * TEMPLATE EXCEL FILES LOCATION:
+ * * TEMPLATE EXCEL FILES LOCATION:
  * Place your Excel template files in: /public/templates/excel/
- * 
- * File naming convention:
+ * * File naming convention:
  * - PUBLIKASI_SIARAN_PERS.xlsx
  * - PRODUKSI_KONTEN_MEDSOS.xlsx
  * - SKORING_PUBLIKASI_MEDIA.xlsx
  * - KAMPANYE_KOMUNIKASI.xlsx
  * - OFI_TO_AFI.xlsx
- * 
- * Template structure should match the expected format for each indicator.
+ * * Template structure should match the expected format for each indicator.
  */
-
-import * as XLSX from 'xlsx';
 
 export interface ExcelTemplate {
   code: string;
@@ -73,21 +68,22 @@ export const EXCEL_TEMPLATES: ExcelTemplate[] = [
     description: 'Template untuk laporan skoring publikasi media massa dengan berbagai jenis media',
     fileName: 'SKORING_PUBLIKASI_MEDIA.xlsx',
     columns: [
-      'Tanggal', 'Media Online', 'Media Cetak', 'Siaran TV', 
-      'Social Media', 'Radio', 'Running Text', 'Catatan'
+      'Link Media Sosial', 'Link Media Online', 'Monitoring Radio', 'Monitoring Media cetak',
+      'Monitoring Running Text', 'Monitoring Siaran TV'
     ],
-    requiredColumns: ['Tanggal'],
-    optionalColumns: ['Media Online', 'Media Cetak', 'Siaran TV', 'Social Media', 'Radio', 'Running Text', 'Catatan'],
+    requiredColumns: [
+      'Link Media Sosial', 'Link Media Online', 'Monitoring Radio', 'Monitoring Media cetak',
+      'Monitoring Running Text', 'Monitoring Siaran TV'
+    ],
+    optionalColumns: [],
     sampleData: [
       {
-        'Tanggal': '2024-01-15',
-        'Media Online': 'https://detik.com/news/example',
-        'Media Cetak': 'https://kompas.com/print/example',
-        'Siaran TV': 'https://tvone.com/news/example',
-        'Social Media': 'https://twitter.com/example',
-        'Radio': 'https://radio.com/news/example',
-        'Running Text': 'https://runningtext.com/example',
-        'Catatan': 'Coverage komprehensif'
+        'Link Media Sosial': 'https://twitter.com/example',
+        'Link Media Online': 'https://detik.com/news/example',
+        'Monitoring Radio': 'https://radio.com/news/example',
+        'Monitoring Media cetak': 'https://kompas.com/print/example',
+        'Monitoring Running Text': 'https://runningtext.com/example',
+        'Monitoring Siaran TV': 'https://tvone.com/news/example',
       }
     ]
   },
@@ -251,49 +247,4 @@ export const downloadTemplate = async (code: string): Promise<void> => {
  */
 export const generateTemplateFromData = (template: ExcelTemplate): any[] => {
   return template.sampleData || [];
-};
-
-/**
- * READ EXCEL FILE FUNCTION
- */
-export const readExcelFile = async (file: File): Promise<any[]> => {
-  return new Promise((resolve, reject) => {
-    try {
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          
-          // Get the first sheet
-          const sheetName = workbook.SheetNames[0];
-          if (!sheetName) {
-            reject(new Error('File Excel tidak memiliki worksheet'));
-            return;
-          }
-          
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          
-          if (!jsonData || jsonData.length === 0) {
-            reject(new Error('File Excel kosong atau tidak memiliki data'));
-            return;
-          }
-          
-          resolve(jsonData);
-        } catch (error) {
-          reject(new Error(`Gagal membaca file Excel: ${error instanceof Error ? error.message : 'Unknown error'}`));
-        }
-      };
-      
-      reader.onerror = () => {
-        reject(new Error('Gagal membaca file'));
-      };
-      
-      reader.readAsArrayBuffer(file);
-    } catch (error) {
-      reject(new Error(`Error saat memproses file: ${error instanceof Error ? error.message : 'Unknown error'}`));
-    }
-  });
 };
