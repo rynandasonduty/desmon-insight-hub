@@ -25,6 +25,7 @@ WHERE monthly_target IS NULL;
 -- Create the new KPI definitions based on requirements
 
 -- 1. KPI: Publikasi Siaran Pers Sub Holding
+ALTER TABLE kpi_definitions ALTER COLUMN target_value DROP NOT NULL;
 INSERT INTO kpi_definitions (
   name, code, description, monthly_target, semester_target, 
   weight_percentage, unit, calculation_type, scoring_period, is_active
@@ -379,8 +380,6 @@ CREATE TABLE IF NOT EXISTS notifications (
   title TEXT NOT NULL,
   message TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('info', 'success', 'warning', 'error')),
-  category TEXT NOT NULL CHECK (category IN ('upload', 'approval', 'rejection', 'system', 'kpi', 'report', 'deadline')),
-  priority TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
   is_read BOOLEAN DEFAULT false,
   action_url TEXT,
   action_text TEXT,
@@ -391,8 +390,6 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX IF NOT EXISTS idx_notifications_category ON notifications(category);
-CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);
 
 -- Create report_periods table for tracking reporting periods
 CREATE TABLE IF NOT EXISTS report_periods (

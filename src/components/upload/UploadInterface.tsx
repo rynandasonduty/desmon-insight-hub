@@ -75,54 +75,54 @@ const UploadInterface = () => {
     }
   };
 
-  const handleDownloadTemplate = async (indicatorCode: string) => {
-    try {
-      const selectedKPI = kpiDefinitions.find(kpi => kpi.code === indicatorCode);
-      if (!selectedKPI) {
-        toast({
-          title: "Error",
-          description: "Indikator tidak ditemukan",
-          variant: "destructive"
-        });
-        return;
-      }
+  // const handleDownloadTemplate = async (indicatorCode: string) => {
+  //   try {
+  //     const selectedKPI = kpiDefinitions.find(kpi => kpi.code === indicatorCode);
+  //     if (!selectedKPI) {
+  //       toast({
+  //         title: "Error",
+  //         description: "Indikator tidak ditemukan",
+  //         variant: "destructive"
+  //       });
+  //       return;
+  //     }
 
-      // Create Excel-like CSV content
-      const templateData = createExcelTemplate(indicatorCode, selectedKPI.name);
+  //     // Create Excel-like CSV content
+  //     const templateData = createExcelTemplate(indicatorCode, selectedKPI.name);
       
-      // Convert to CSV format
-      const csvContent = templateData
-        .map(row => row.map((cell: any) => `"${cell}"`).join(','))
-        .join('\n');
+  //     // Convert to CSV format
+  //     const csvContent = templateData
+  //       .map(row => row.map((cell: any) => `"${cell}"`).join(','))
+  //       .join('\n');
 
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
+  //     // Create and download file
+  //     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  //     const link = document.createElement('a');
+  //     const url = URL.createObjectURL(blob);
       
-      link.setAttribute('href', url);
-      link.setAttribute('download', `Template_${selectedKPI.name.replace(/\s+/g, '_')}.csv`);
-      link.style.visibility = 'hidden';
+  //     link.setAttribute('href', url);
+  //     link.setAttribute('download', `Template_${selectedKPI.name.replace(/\s+/g, '_')}.csv`);
+  //     link.style.visibility = 'hidden';
       
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     document.body.removeChild(link);
       
-      URL.revokeObjectURL(url);
+  //     URL.revokeObjectURL(url);
 
-      toast({
-        title: "Template Berhasil Diunduh",
-        description: `Template untuk ${selectedKPI.name} telah diunduh sebagai file CSV. Anda dapat membukanya dengan Excel dan menyimpan sebagai .xlsx`,
-      });
-    } catch (error) {
-      console.error('Error downloading template:', error);
-      toast({
-        title: "Error",
-        description: "Gagal mengunduh template. Silakan coba lagi.",
-        variant: "destructive"
-      });
-    }
-  };
+  //     toast({
+  //       title: "Template Berhasil Diunduh",
+  //       description: `Template untuk ${selectedKPI.name} telah diunduh sebagai file CSV. Anda dapat membukanya dengan Excel dan menyimpan sebagai .xlsx`,
+  //     });
+  //   } catch (error) {
+  //     console.error('Error downloading template:', error);
+  //     toast({
+  //       title: "Error",
+  //       description: "Gagal mengunduh template. Silakan coba lagi.",
+  //       variant: "destructive"
+  //     });
+  //   }
+  // };
 
   const handleTemplateDownload = async (templateCode: string) => {
     try {

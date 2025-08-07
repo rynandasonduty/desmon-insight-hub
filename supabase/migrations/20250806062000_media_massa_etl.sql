@@ -57,6 +57,7 @@ ALTER TABLE processed_media_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE report_scoring_details ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies for processed_media_items
+DROP POLICY IF EXISTS "Users can view media items for their own reports" ON processed_media_items;
 CREATE POLICY "Users can view media items for their own reports" 
 ON processed_media_items 
 FOR SELECT 
@@ -69,17 +70,20 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "System can insert media items" ON processed_media_items;
 CREATE POLICY "System can insert media items" 
 ON processed_media_items 
 FOR INSERT 
 WITH CHECK (true);
 
+DROP POLICY IF EXISTS "System can update media items" ON processed_media_items;
 CREATE POLICY "System can update media items" 
 ON processed_media_items 
 FOR UPDATE 
 USING (true);
 
 -- RLS policies for report_scoring_details
+DROP POLICY IF EXISTS "Users can view scoring details for their own reports" ON report_scoring_details;
 CREATE POLICY "Users can view scoring details for their own reports" 
 ON report_scoring_details 
 FOR SELECT 
@@ -92,11 +96,13 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "System can insert scoring details" ON report_scoring_details;
 CREATE POLICY "System can insert scoring details" 
 ON report_scoring_details 
 FOR INSERT 
 WITH CHECK (true);
 
+DROP POLICY IF EXISTS "System can update scoring details" ON report_scoring_details;
 CREATE POLICY "System can update scoring details" 
 ON report_scoring_details 
 FOR UPDATE 
